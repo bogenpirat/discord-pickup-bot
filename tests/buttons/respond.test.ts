@@ -49,7 +49,7 @@ describe('handleRespond', () => {
     );
 
     expect(context.responses.listByPickup(id)).toHaveLength(1);
-    expect(labelsOf(fake.editedWith())).toEqual(['Dabei · 1', 'Wenn mehr · 0', 'Raus · 0']);
+    expect(labelsOf(fake.editedWith())).toEqual(['Dabei · 1', 'Später · 0', 'Raus · 0']);
     expect(fake.calls[0]?.method).toBe('deferUpdate');
   });
 
@@ -82,14 +82,14 @@ describe('handleRespond', () => {
     const second = createFakeButtonInteraction({ userId: 'u1' });
     await handleRespond(
       second.interaction,
-      { action: 'respond', choice: 'ifMore', pickupId: id },
+      { action: 'respond', choice: 'later', pickupId: id },
       context,
     );
 
     const stored = context.responses.listByPickup(id);
     expect(stored).toHaveLength(1);
-    expect(stored[0]?.choice).toBe('ifMore');
-    expect(labelsOf(second.editedWith())).toEqual(['Dabei · 0', 'Wenn mehr · 1', 'Raus · 0']);
+    expect(stored[0]?.choice).toBe('later');
+    expect(labelsOf(second.editedWith())).toEqual(['Dabei · 0', 'Später · 1', 'Raus · 0']);
   });
 
   it('keeps separate users independent', async () => {

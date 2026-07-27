@@ -24,7 +24,7 @@ const pickup = (overrides: Partial<PickupRecord> = {}): PickupRecord => ({
   ...overrides,
 });
 
-const responses = (count: number, choice: 'in' | 'ifMore' | 'out' = 'in'): ResponseSet =>
+const responses = (count: number, choice: 'in' | 'later' | 'out' = 'in'): ResponseSet =>
   Array.from({ length: count }, (_, index) => ({
     userId: `user-${index}`,
     choice,
@@ -49,7 +49,7 @@ describe('button rendering', () => {
       ?.toJSON()
       .components.map((component) => ('label' in component ? component.label : undefined));
 
-    expect(labels).toEqual(['Dabei · 4', 'Wenn mehr · 0', 'Raus · 2']);
+    expect(labels).toEqual(['Dabei · 4', 'Später · 0', 'Raus · 2']);
   });
 
   it('encodes a decodable custom id on every button', () => {

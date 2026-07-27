@@ -2,7 +2,7 @@
 
 Coordinates pickup games for a video game. A member calls a pickup with `/valo`, the bot
 posts one message to a configured channel, pings a configured role, and keeps a live tally
-of who is **Dabei**, **Wenn mehr**, or **Raus**.
+of who is **Dabei**, **Später** (joining later), or **Raus**.
 
 German is the default language; English speakers get English command names and replies via
 Discord's own locale.

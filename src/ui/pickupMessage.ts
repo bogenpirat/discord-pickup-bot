@@ -19,7 +19,7 @@ const FIELD_LIMIT = 1024;
 
 const BUTTON_STYLES: Readonly<Record<PickupChoice, ButtonStyle>> = {
   in: ButtonStyle.Success,
-  ifMore: ButtonStyle.Primary,
+  later: ButtonStyle.Primary,
   out: ButtonStyle.Secondary,
 };
 

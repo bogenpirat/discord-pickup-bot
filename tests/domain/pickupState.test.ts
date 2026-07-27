@@ -36,9 +36,9 @@ describe('applyChoice', () => {
 
   it('switches without duplicating when a different choice is clicked', () => {
     const first = applyChoice(empty, 'u1', 'in', 100);
-    const second = applyChoice(first.responses, 'u1', 'ifMore', 200);
-    expect(second.change).toEqual({ kind: 'switched', from: 'in', to: 'ifMore' });
-    expect(second.responses).toEqual([{ userId: 'u1', choice: 'ifMore', respondedAt: 200 }]);
+    const second = applyChoice(first.responses, 'u1', 'later', 200);
+    expect(second.change).toEqual({ kind: 'switched', from: 'in', to: 'later' });
+    expect(second.responses).toEqual([{ userId: 'u1', choice: 'later', respondedAt: 200 }]);
   });
 
   it.each(PICKUP_CHOICES.flatMap((from) => PICKUP_CHOICES.map((to) => [from, to] as const)))(
@@ -64,7 +64,7 @@ describe('applyChoice', () => {
     responses = applyChoice(responses, 'u3', 'out', 120).responses;
     responses = applyChoice(responses, 'u1', 'in', 130).responses;
 
-    expect(tally(responses)).toEqual({ in: 1, ifMore: 0, out: 1 });
+    expect(tally(responses)).toEqual({ in: 1, later: 0, out: 1 });
     expect(findResponse(responses, 'u1')).toBeUndefined();
     expect(findResponse(responses, 'u2')?.choice).toBe('in');
   });
@@ -114,12 +114,12 @@ describe('tally', () => {
     const responses: ResponseSet = [
       { userId: 'a', choice: 'in', respondedAt: 1 },
       { userId: 'b', choice: 'in', respondedAt: 2 },
-      { userId: 'c', choice: 'ifMore', respondedAt: 3 },
+      { userId: 'c', choice: 'later', respondedAt: 3 },
     ];
-    expect(tally(responses)).toEqual({ in: 2, ifMore: 1, out: 0 });
+    expect(tally(responses)).toEqual({ in: 2, later: 1, out: 0 });
   });
 
   it('is all zeroes for an empty set', () => {
-    expect(tally(empty)).toEqual({ in: 0, ifMore: 0, out: 0 });
+    expect(tally(empty)).toEqual({ in: 0, later: 0, out: 0 });
   });
 });

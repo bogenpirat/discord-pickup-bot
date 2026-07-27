@@ -59,7 +59,7 @@ describe('string tables', () => {
 
   it.each([...APP_LOCALES])('covers all three choices for %s', (locale) => {
     const strings = stringsFor(locale);
-    expect(Object.keys(strings.choice).sort()).toEqual(['ifMore', 'in', 'out']);
-    expect(Object.keys(strings.choiceField).sort()).toEqual(['ifMore', 'in', 'out']);
+    expect(Object.keys(strings.choice).sort()).toEqual(['in', 'later', 'out']);
+    expect(Object.keys(strings.choiceField).sort()).toEqual(['in', 'later', 'out']);
   });
 });

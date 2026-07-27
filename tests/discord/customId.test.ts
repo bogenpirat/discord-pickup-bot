@@ -20,7 +20,7 @@ describe('round trip', () => {
   });
 
   it('stays inside the discord custom id length limit', () => {
-    expect(encodeRespond('ifMore', Number.MAX_SAFE_INTEGER).length).toBeLessThanOrEqual(100);
+    expect(encodeRespond('later', Number.MAX_SAFE_INTEGER).length).toBeLessThanOrEqual(100);
   });
 });
 

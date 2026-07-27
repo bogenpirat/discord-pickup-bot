@@ -1,4 +1,4 @@
-export const PICKUP_CHOICES = ['in', 'ifMore', 'out'] as const;
+export const PICKUP_CHOICES = ['in', 'later', 'out'] as const;
 
 export type PickupChoice = (typeof PICKUP_CHOICES)[number];
 

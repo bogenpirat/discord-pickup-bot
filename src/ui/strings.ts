@@ -51,8 +51,8 @@ export interface ConfigSummaryParts {
 }
 
 const de: Strings = {
-  choice: { in: 'Dabei', ifMore: 'Wenn mehr', out: 'Raus' },
-  choiceField: { in: '✅ Dabei', ifMore: '🤔 Wenn mehr', out: '❌ Raus' },
+  choice: { in: 'Dabei', later: 'Später', out: 'Raus' },
+  choiceField: { in: '✅ Dabei', later: '🕗 Später', out: '❌ Raus' },
   closeButton: 'Schließen',
   title: 'Pickup',
   noneYet: '—',
@@ -92,8 +92,8 @@ const de: Strings = {
 };
 
 const en: Strings = {
-  choice: { in: 'In', ifMore: 'If more', out: 'Out' },
-  choiceField: { in: '✅ In', ifMore: '🤔 If more', out: '❌ Out' },
+  choice: { in: 'In', later: 'Later', out: 'Out' },
+  choiceField: { in: '✅ In', later: '🕗 Later', out: '❌ Out' },
   closeButton: 'Close',
   title: 'Pickup',
   noneYet: '—',

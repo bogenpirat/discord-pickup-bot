@@ -1,12 +1,64 @@
 import { describe, expect, it } from 'vitest';
-import { pickupCommand } from '../../src/commands/pickup.ts';
 import { pickupConfigCommand } from '../../src/commands/pickupConfig.ts';
+import { valoCommand } from '../../src/commands/valo.ts';
 import { createFakeCommandInteraction, createTestContext } from '../helpers/fakes.ts';
 
-describe('/pickup-config', () => {
-  it('requires manage guild', async () => {
+const ADMIN_ROLE = 'role-admin';
+
+describe('/pickup-config access control', () => {
+  it('refuses a plain member', async () => {
     const context = createTestContext();
     const fake = createFakeCommandInteraction({ subcommand: 'show', manageGuild: false });
+
+    await pickupConfigCommand.execute(fake.interaction, context);
+
+    expect(fake.messages().join(' ')).toContain('Server verwalten');
+  });
+
+  it('allows a member with manage server', async () => {
+    const context = createTestContext();
+    const fake = createFakeCommandInteraction({ subcommand: 'show', manageGuild: true });
+
+    await pickupConfigCommand.execute(fake.interaction, context);
+
+    expect(fake.messages().join(' ')).toContain('Kanal:');
+  });
+
+  it('allows a power user configured in the environment', async () => {
+    const context = createTestContext(undefined, ['power-1']);
+    const fake = createFakeCommandInteraction({
+      subcommand: 'show',
+      manageGuild: false,
+      userId: 'power-1',
+    });
+
+    await pickupConfigCommand.execute(fake.interaction, context);
+
+    expect(fake.messages().join(' ')).toContain('Kanal:');
+  });
+
+  it('allows a member holding the configured admin role', async () => {
+    const context = createTestContext();
+    context.settings.setConfigRole('guild-1', ADMIN_ROLE);
+    const fake = createFakeCommandInteraction({
+      subcommand: 'show',
+      manageGuild: false,
+      roleIds: [ADMIN_ROLE],
+    });
+
+    await pickupConfigCommand.execute(fake.interaction, context);
+
+    expect(fake.messages().join(' ')).toContain('Kanal:');
+  });
+
+  it('refuses a member holding some other role', async () => {
+    const context = createTestContext();
+    context.settings.setConfigRole('guild-1', ADMIN_ROLE);
+    const fake = createFakeCommandInteraction({
+      subcommand: 'show',
+      manageGuild: false,
+      roleIds: ['role-other'],
+    });
 
     await pickupConfigCommand.execute(fake.interaction, context);
 
@@ -21,7 +73,58 @@ describe('/pickup-config', () => {
 
     expect(fake.messages().join(' ')).toContain('nur auf einem Server');
   });
+});
 
+describe('/pickup-config admin-role', () => {
+  it('lets an admin set and clear the admin role', async () => {
+    const context = createTestContext();
+
+    const set = createFakeCommandInteraction({
+      subcommand: 'admin-role',
+      manageGuild: true,
+      roles: { role: { id: ADMIN_ROLE } },
+    });
+    await pickupConfigCommand.execute(set.interaction, context);
+    expect(context.settings.get('guild-1').configRoleId).toBe(ADMIN_ROLE);
+
+    const clear = createFakeCommandInteraction({ subcommand: 'admin-role', manageGuild: true });
+    await pickupConfigCommand.execute(clear.interaction, context);
+    expect(context.settings.get('guild-1').configRoleId).toBeNull();
+    expect(clear.messages().join(' ')).toContain('keine Admin-Rolle');
+  });
+
+  it('lets a power user set the admin role', async () => {
+    const context = createTestContext(undefined, ['power-1']);
+    const fake = createFakeCommandInteraction({
+      subcommand: 'admin-role',
+      manageGuild: false,
+      userId: 'power-1',
+      roles: { role: { id: ADMIN_ROLE } },
+    });
+
+    await pickupConfigCommand.execute(fake.interaction, context);
+
+    expect(context.settings.get('guild-1').configRoleId).toBe(ADMIN_ROLE);
+  });
+
+  it('does not let the admin role grant itself to another role', async () => {
+    const context = createTestContext();
+    context.settings.setConfigRole('guild-1', ADMIN_ROLE);
+    const fake = createFakeCommandInteraction({
+      subcommand: 'admin-role',
+      manageGuild: false,
+      roleIds: [ADMIN_ROLE],
+      roles: { role: { id: 'role-escalated' } },
+    });
+
+    await pickupConfigCommand.execute(fake.interaction, context);
+
+    expect(context.settings.get('guild-1').configRoleId).toBe(ADMIN_ROLE);
+    expect(fake.messages().join(' ')).toContain('Nur Mitglieder');
+  });
+});
+
+describe('/pickup-config settings', () => {
   it('saves the pickup channel', async () => {
     const context = createTestContext();
     const fake = createFakeCommandInteraction({
@@ -74,15 +177,17 @@ describe('/pickup-config', () => {
     expect(invalid.messages().join(' ')).toContain('keine gültige Zeitzone');
   });
 
-  it('shows the current configuration', async () => {
+  it('shows the current configuration including the admin role', async () => {
     const context = createTestContext();
     context.settings.setPickupChannel('guild-1', 'channel-1');
+    context.settings.setConfigRole('guild-1', ADMIN_ROLE);
 
     const fake = createFakeCommandInteraction({ subcommand: 'show', manageGuild: true });
     await pickupConfigCommand.execute(fake.interaction, context);
 
     const message = fake.messages().join(' ');
     expect(message).toContain('<#channel-1>');
+    expect(message).toContain(`<@&${ADMIN_ROLE}>`);
     expect(message).toContain('nicht gesetzt');
     expect(message).toContain('Europe/Berlin');
   });
@@ -97,7 +202,7 @@ describe('/pickup-config', () => {
   });
 });
 
-describe('/pickup', () => {
+describe('/valo', () => {
   const configured = () => {
     const context = createTestContext();
     context.settings.setPickupChannel('guild-1', 'channel-1');
@@ -105,11 +210,17 @@ describe('/pickup', () => {
     return context;
   };
 
+  const at = (iso: string) => Temporal.Instant.from(iso).epochMilliseconds;
+
+  it('is registered as /valo', () => {
+    expect(valoCommand.name).toBe('valo');
+  });
+
   it('refuses when no channel is configured', async () => {
     const context = createTestContext();
-    const fake = createFakeCommandInteraction();
+    const fake = createFakeCommandInteraction({ commandName: 'valo' });
 
-    await pickupCommand.execute(fake.interaction, context);
+    await valoCommand.execute(fake.interaction, context);
 
     expect(fake.messages().join(' ')).toContain('kein Pickup-Kanal');
   });
@@ -118,7 +229,7 @@ describe('/pickup', () => {
     const context = configured();
     const fake = createFakeCommandInteraction({ guildId: null });
 
-    await pickupCommand.execute(fake.interaction, context);
+    await valoCommand.execute(fake.interaction, context);
 
     expect(fake.messages().join(' ')).toContain('nur auf einem Server');
   });
@@ -127,97 +238,98 @@ describe('/pickup', () => {
     const context = configured();
     const fake = createFakeCommandInteraction({ sendable: false });
 
-    await pickupCommand.execute(fake.interaction, context);
+    await valoCommand.execute(fake.interaction, context);
 
     expect(fake.messages().join(' ')).toContain('nicht schreiben');
   });
 
-  it('posts a pickup and stores the message id', async () => {
+  it('posts with no info at all', async () => {
     const context = configured();
-    const fake = createFakeCommandInteraction({ strings: { time: '20:30', note: 'ranked' } });
+    const fake = createFakeCommandInteraction();
 
-    await pickupCommand.execute(fake.interaction, context);
+    await valoCommand.execute(fake.interaction, context);
 
-    expect(fake.sent).toHaveLength(1);
     const stored = context.pickups.findByMessageId('message-1');
-    expect(stored?.note).toBe('ranked');
-    expect(stored?.startsAt).toBe(Temporal.Instant.from('2026-07-27T18:30:00Z').epochMilliseconds);
+    expect(stored?.startsAt).toBeNull();
+    expect(stored?.note).toBeNull();
     expect(fake.messages().join(' ')).toContain('Pickup gepostet');
+  });
+
+  it('pulls a time out of free text and keeps the rest as the note', async () => {
+    const context = configured();
+    const fake = createFakeCommandInteraction({
+      strings: { info: 'wer hat bock auf ranked um halb 9' },
+    });
+
+    await valoCommand.execute(fake.interaction, context);
+
+    const stored = context.pickups.findByMessageId('message-1');
+    expect(stored?.startsAt).toBe(at('2026-07-27T18:30:00Z'));
+    expect(stored?.note).toBe('wer hat bock auf ranked');
+  });
+
+  it.each([
+    ['20:30', at('2026-07-27T18:30:00Z')],
+    ['21 uhr', at('2026-07-27T19:00:00Z')],
+    ['in 90 minuten', at('2026-07-27T14:30:00Z')],
+    ['morgen 20:30', at('2026-07-28T18:30:00Z')],
+  ])('reads %s from the info field', async (info, expected) => {
+    const context = configured();
+    const fake = createFakeCommandInteraction({ strings: { info } });
+
+    await valoCommand.execute(fake.interaction, context);
+
+    expect(context.pickups.findByMessageId('message-1')?.startsAt).toBe(expected);
+  });
+
+  it('keeps free text as a note when it holds no time', async () => {
+    const context = configured();
+    const fake = createFakeCommandInteraction({ strings: { info: 'brauchen noch 2 leute' } });
+
+    await valoCommand.execute(fake.interaction, context);
+
+    const stored = context.pickups.findByMessageId('message-1');
+    expect(stored?.startsAt).toBeNull();
+    expect(stored?.note).toBe('brauchen noch 2 leute');
+    expect(fake.messages().join(' ')).toContain('keine Uhrzeit gefunden');
+  });
+
+  it('does not nag about a missing time when no info was given', async () => {
+    const context = configured();
+    const fake = createFakeCommandInteraction();
+
+    await valoCommand.execute(fake.interaction, context);
+
+    expect(fake.messages().join(' ')).not.toContain('keine Uhrzeit gefunden');
   });
 
   it('mentions the configured role', async () => {
     const context = configured();
     const fake = createFakeCommandInteraction();
 
-    await pickupCommand.execute(fake.interaction, context);
+    await valoCommand.execute(fake.interaction, context);
 
     expect((fake.sent[0] as { content: string }).content).toBe('<@&role-1>');
-  });
-
-  it('posts without a start time when none is given', async () => {
-    const context = configured();
-    const fake = createFakeCommandInteraction();
-
-    await pickupCommand.execute(fake.interaction, context);
-
-    expect(context.pickups.findByMessageId('message-1')?.startsAt).toBeNull();
-  });
-
-  it('falls back to literal text when the time cannot be parsed', async () => {
-    const context = configured();
-    const fake = createFakeCommandInteraction({
-      strings: { time: 'kurz nach dem Abendessen' },
-    });
-
-    await pickupCommand.execute(fake.interaction, context);
-
-    const stored = context.pickups.findByMessageId('message-1');
-    expect(stored?.startsAt).toBeNull();
-    expect(stored?.startsAtText).toBe('kurz nach dem Abendessen');
-    expect(fake.messages().join(' ')).toContain('nicht verstanden');
-  });
-
-  it('reads a german colloquial time in the configured zone', async () => {
-    const context = configured();
-    const fake = createFakeCommandInteraction({ strings: { time: 'halb 9' } });
-
-    await pickupCommand.execute(fake.interaction, context);
-
-    expect(context.pickups.findByMessageId('message-1')?.startsAt).toBe(
-      Temporal.Instant.from('2026-07-27T18:30:00Z').epochMilliseconds,
-    );
   });
 
   it('rolls back the pickup row when posting fails', async () => {
     const context = configured();
     const fake = createFakeCommandInteraction({ sendFails: true });
 
-    await pickupCommand.execute(fake.interaction, context);
+    await valoCommand.execute(fake.interaction, context);
 
     expect(context.database.prepare('SELECT COUNT(*) AS c FROM pickups').get()?.['c']).toBe(0);
     expect(fake.messages().join(' ')).toContain('nicht schreiben');
   });
 
-  it('ignores a blank time option', async () => {
+  it('ignores a blank info option', async () => {
     const context = configured();
-    const fake = createFakeCommandInteraction({ strings: { time: '   ' } });
+    const fake = createFakeCommandInteraction({ strings: { info: '   ' } });
 
-    await pickupCommand.execute(fake.interaction, context);
+    await valoCommand.execute(fake.interaction, context);
 
     const stored = context.pickups.findByMessageId('message-1');
     expect(stored?.startsAt).toBeNull();
-    expect(stored?.startsAtText).toBeNull();
-  });
-
-  it('autocompletes time suggestions', async () => {
-    const context = createTestContext();
-
-    const filtered = createFakeCommandInteraction({ focused: 'halb' });
-    await pickupCommand.autocomplete?.(filtered.interaction as never, context);
-    expect(filtered.autocompleteChoices().map((choice) => choice.value)).toEqual(['halb 9']);
-
-    const unmatched = createFakeCommandInteraction({ focused: 'zzz' });
-    await pickupCommand.autocomplete?.(unmatched.interaction as never, context);
-    expect(unmatched.autocompleteChoices().length).toBeGreaterThan(1);
+    expect(stored?.note).toBeNull();
   });
 });

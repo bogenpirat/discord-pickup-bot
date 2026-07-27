@@ -21,15 +21,21 @@ export interface AppContext {
   readonly responses: ResponseRepository;
   readonly mutex: KeyedMutex;
   readonly logger: Logger;
+  readonly powerUserIds: readonly string[];
   now(): Temporal.Instant;
 }
 
-export const createAppContext = (db: DatabaseSync, logger: Logger): AppContext => ({
+export const createAppContext = (
+  db: DatabaseSync,
+  logger: Logger,
+  powerUserIds: readonly string[] = [],
+): AppContext => ({
   db,
   settings: createGuildSettingsRepository(db),
   pickups: createPickupRepository(db),
   responses: createResponseRepository(db),
   mutex: createKeyedMutex(),
   logger,
+  powerUserIds,
   now: () => Temporal.Now.instant(),
 });

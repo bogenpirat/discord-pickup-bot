@@ -16,7 +16,7 @@ const logger = createLogger(env.LOG_LEVEL, env.NODE_ENV !== 'production');
 mkdirSync(dirname(env.DATABASE_PATH), { recursive: true });
 
 const db = openDatabase(env.DATABASE_PATH);
-const context = createAppContext(db, logger);
+const context = createAppContext(db, logger, env.POWER_USER_IDS);
 const commands = buildCommandRegistry();
 const buttons = buildButtonRegistry();
 const client = createClient();

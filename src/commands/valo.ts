@@ -7,40 +7,22 @@ import {
 import type { AppContext } from '../app/context.ts';
 import { replyEphemeral } from '../discord/reply.ts';
 import type { SlashCommand } from '../discord/types.ts';
-import { parseStartTime } from '../domain/time/parseStartTime.ts';
+import { extractStartTime } from '../domain/time/extract.ts';
 import { renderPickupMessage } from '../ui/pickupMessage.ts';
 import { resolveLocale, stringsFor } from '../ui/strings.ts';
 
-const TIME_SUGGESTIONS = [
-  '20:30',
-  '21 Uhr',
-  'halb 9',
-  'viertel vor 9',
-  'in 30 Minuten',
-  'morgen 20:30',
-];
-
 const definition = new SlashCommandBuilder()
-  .setName('pickup')
+  .setName('valo')
   .setDescription('Call a pickup game')
-  .setDescriptionLocalizations({ de: 'Ruf ein Pickup-Spiel aus' })
+  .setDescriptionLocalizations({ de: 'Ruf eine Valorant-Runde aus' })
   .setContexts(InteractionContextType.Guild)
   .addStringOption((option) =>
     option
-      .setName('time')
-      .setNameLocalizations({ de: 'zeit' })
-      .setDescription('When it starts, for example 20:30, halb 9, in 30 Minuten')
-      .setDescriptionLocalizations({ de: 'Startzeit, z. B. 20:30, halb 9, in 30 Minuten' })
-      .setAutocomplete(true)
-      .setMaxLength(100)
-      .setRequired(false),
-  )
-  .addStringOption((option) =>
-    option
-      .setName('note')
-      .setNameLocalizations({ de: 'notiz' })
-      .setDescription('Optional note shown in the message')
-      .setDescriptionLocalizations({ de: 'Optionale Notiz, die im Post erscheint' })
+      .setName('info')
+      .setDescription('Free text, any time in it is picked up automatically')
+      .setDescriptionLocalizations({
+        de: 'Freitext, eine enthaltene Uhrzeit wird automatisch erkannt',
+      })
       .setMaxLength(200)
       .setRequired(false),
   );
@@ -72,28 +54,16 @@ const execute = async (
     return;
   }
 
-  const rawTime = interaction.options.getString('time');
-  const note = interaction.options.getString('note');
-
-  let startsAt: number | null = null;
-  let startsAtText: string | null = null;
-
-  if (rawTime !== null && rawTime.trim() !== '') {
-    const parsed = parseStartTime(rawTime, settings.timezone, context.now());
-    if (parsed.ok) {
-      startsAt = parsed.value.epochMilliseconds;
-    } else {
-      startsAtText = rawTime.trim();
-    }
-  }
+  const info = interaction.options.getString('info') ?? '';
+  const extracted = extractStartTime(info, settings.timezone, context.now());
 
   const pickupId = context.pickups.create({
     guildId: interaction.guildId,
     channelId: channel.id,
     creatorId: interaction.user.id,
-    startsAt,
-    startsAtText,
-    note,
+    startsAt: extracted.startsAt === null ? null : extracted.startsAt.epochMilliseconds,
+    startsAtText: null,
+    note: extracted.note,
   });
 
   const pickup = context.pickups.findById(pickupId);
@@ -112,7 +82,8 @@ const execute = async (
     );
     context.pickups.attachMessage(pickupId, message.id);
 
-    const notice = startsAtText === null ? '' : `\n${strings.timeNotUnderstood}`;
+    const notice =
+      info.trim() !== '' && extracted.startsAt === null ? `\n${strings.noTimeFound}` : '';
     await interaction.editReply({ content: `${strings.posted(message.url)}${notice}` });
   } catch (error) {
     context.pickups.remove(pickupId);
@@ -121,20 +92,8 @@ const execute = async (
   }
 };
 
-export const pickupCommand: SlashCommand = {
-  name: 'pickup',
+export const valoCommand: SlashCommand = {
+  name: 'valo',
   definition: definition.toJSON(),
   execute,
-  autocomplete: async (interaction) => {
-    const query = interaction.options.getFocused().toLowerCase();
-    const matches = TIME_SUGGESTIONS.filter((suggestion) =>
-      suggestion.toLowerCase().includes(query),
-    );
-    await interaction.respond(
-      (matches.length > 0 ? matches : TIME_SUGGESTIONS).map((suggestion) => ({
-        name: suggestion,
-        value: suggestion,
-      })),
-    );
-  },
 };

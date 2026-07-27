@@ -49,7 +49,7 @@ describe('createAppContext', () => {
 describe('registries', () => {
   it('registers both slash commands with unique names', () => {
     const names = COMMANDS.map((command) => command.name);
-    expect(names).toEqual(['pickup', 'pickup-config']);
+    expect(names).toEqual(['valo', 'pickup-config']);
     expect(new Set(names).size).toBe(names.length);
   });
 
@@ -60,16 +60,38 @@ describe('registries', () => {
     }
   });
 
-  it('localises the pickup time option to german', () => {
-    const pickup = COMMANDS.find((command) => command.name === 'pickup');
-    expect(pickup).toBeDefined();
+  it('gives /valo exactly one optional free-text option', () => {
+    const valo = COMMANDS.find((command) => command.name === 'valo');
+    expect(valo).toBeDefined();
 
-    const definition = pickup?.definition as {
+    const definition = valo?.definition as {
+      options?: { name: string; required?: boolean }[];
+    };
+
+    expect(definition.options).toHaveLength(1);
+    expect(definition.options?.[0]?.name).toBe('info');
+    expect(definition.options?.[0]?.required ?? false).toBe(false);
+  });
+
+  it('localises the config subcommands to german', () => {
+    const config = COMMANDS.find((command) => command.name === 'pickup-config');
+    const definition = config?.definition as {
       options?: { name: string; name_localizations?: Record<string, string> }[];
     };
-    const time = definition.options?.find((option) => option.name === 'time');
+    const names = Object.fromEntries(
+      (definition.options ?? []).map((option) => [option.name, option.name_localizations?.['de']]),
+    );
 
-    expect(time?.name_localizations?.['de']).toBe('zeit');
+    expect(names['channel']).toBe('kanal');
+    expect(names['admin-role']).toBe('admin-rolle');
+    expect(names['timezone']).toBe('zeitzone');
+  });
+
+  it('does not gate the config command behind default member permissions', () => {
+    const config = COMMANDS.find((command) => command.name === 'pickup-config');
+    const definition = config?.definition as { default_member_permissions?: string | null };
+
+    expect(definition.default_member_permissions ?? null).toBeNull();
   });
 
   it('builds a button registry that dispatches', async () => {

@@ -56,6 +56,7 @@ describe('guildSettingsRepository', () => {
       guildId: 'unknown',
       pickupChannelId: null,
       mentionRoleId: null,
+      configRoleId: null,
       timezone: 'Europe/Berlin',
     });
     expect(db.prepare('SELECT COUNT(*) AS c FROM guild_settings').get()?.['c']).toBe(0);
@@ -66,14 +67,23 @@ describe('guildSettingsRepository', () => {
 
     repository.setPickupChannel(GUILD, 'channel-1');
     repository.setMentionRole(GUILD, 'role-1');
+    repository.setConfigRole(GUILD, 'role-admin');
     repository.setTimezone(GUILD, 'UTC');
 
     expect(repository.get(GUILD)).toEqual({
       guildId: GUILD,
       pickupChannelId: 'channel-1',
       mentionRoleId: 'role-1',
+      configRoleId: 'role-admin',
       timezone: 'UTC',
     });
+  });
+
+  it('clears the config role', () => {
+    const repository = createGuildSettingsRepository(db);
+    repository.setConfigRole(GUILD, 'role-admin');
+    repository.setConfigRole(GUILD, null);
+    expect(repository.get(GUILD).configRoleId).toBeNull();
   });
 
   it('updates rather than duplicating on repeat writes', () => {

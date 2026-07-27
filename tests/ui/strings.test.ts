@@ -43,9 +43,17 @@ describe('string tables', () => {
     expect(strings.configTimezoneSaved('UTC')).toContain('UTC');
     expect(strings.posted('https://discord.com/x')).toContain('https://discord.com/x');
 
-    const summary = strings.configSummary('<#c1>', '<@&r1>', 'UTC');
+    expect(strings.configAdminRoleSaved('r2')).toContain('<@&r2>');
+
+    const summary = strings.configSummary({
+      channel: '<#c1>',
+      role: '<@&r1>',
+      adminRole: '<@&r2>',
+      timezone: 'UTC',
+    });
     expect(summary).toContain('<#c1>');
     expect(summary).toContain('<@&r1>');
+    expect(summary).toContain('<@&r2>');
     expect(summary).toContain('UTC');
   });
 

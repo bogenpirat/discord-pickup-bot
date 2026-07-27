@@ -4,6 +4,17 @@ const schema = z.object({
   DISCORD_TOKEN: z.string().min(1),
   DISCORD_APP_ID: z.string().min(1),
   DISCORD_DEV_GUILD_ID: z.string().min(1).optional(),
+  POWER_USER_IDS: z
+    .string()
+    .optional()
+    .transform((value) =>
+      value === undefined
+        ? []
+        : value
+            .split(',')
+            .map((id) => id.trim())
+            .filter((id) => id !== ''),
+    ),
   DATABASE_PATH: z.string().min(1).default('./data/pickup.db'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   HEARTBEAT_PATH: z.string().min(1).default('/tmp/heartbeat'),

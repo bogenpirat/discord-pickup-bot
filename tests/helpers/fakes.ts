@@ -24,12 +24,13 @@ export interface TestContext extends AppContext {
 
 export const createTestContext = (
   now = Temporal.Instant.from('2026-07-27T13:00:00Z'),
+  powerUserIds: readonly string[] = [],
 ): TestContext => {
   const database = new DatabaseSync(':memory:');
   database.exec('PRAGMA foreign_keys = ON');
   migrate(database);
 
-  const context = createAppContext(database, silentLogger());
+  const context = createAppContext(database, silentLogger(), powerUserIds);
   return { ...context, now: () => now, database };
 };
 
@@ -45,6 +46,8 @@ export interface FakeInteractionOptions {
   readonly guildId?: string | null;
   readonly customId?: string;
   readonly replyFails?: boolean;
+  readonly roleIds?: readonly string[];
+  readonly powerUserIds?: readonly string[];
 }
 
 export interface FakeButtonInteraction {
@@ -160,6 +163,7 @@ export const createFakeCommandInteraction = (
     guildId,
     user: { id: options.userId ?? 'user-1' },
     memberPermissions: permissions(options.manageGuild ?? false),
+    member: guildId === null ? null : { roles: [...(options.roleIds ?? [])] },
     guild: guildId === null ? null : { channels: { fetch: async () => channel } },
     inGuild: () => guildId !== null,
     get deferred() {

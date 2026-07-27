@@ -6,6 +6,7 @@ export interface GuildSettings {
   readonly guildId: string;
   readonly pickupChannelId: string | null;
   readonly mentionRoleId: string | null;
+  readonly configRoleId: string | null;
   readonly timezone: string;
 }
 
@@ -13,6 +14,7 @@ export interface GuildSettingsRepository {
   get(guildId: string): GuildSettings;
   setPickupChannel(guildId: string, channelId: string | null): void;
   setMentionRole(guildId: string, roleId: string | null): void;
+  setConfigRole(guildId: string, roleId: string | null): void;
   setTimezone(guildId: string, timezone: string): void;
 }
 
@@ -20,6 +22,7 @@ const defaults = (guildId: string): GuildSettings => ({
   guildId,
   pickupChannelId: null,
   mentionRoleId: null,
+  configRoleId: null,
   timezone: DEFAULT_TIME_ZONE,
 });
 
@@ -27,6 +30,7 @@ const toSettings = (row: SqlRow): GuildSettings => ({
   guildId: asText(row['guild_id']),
   pickupChannelId: asNullableText(row['pickup_channel_id']),
   mentionRoleId: asNullableText(row['mention_role_id']),
+  configRoleId: asNullableText(row['config_role_id']),
   timezone: asText(row['timezone']),
 });
 
@@ -46,6 +50,7 @@ export const createGuildSettingsRepository = (db: DatabaseSync): GuildSettingsRe
 
   const setPickupChannel = upsert('pickup_channel_id');
   const setMentionRole = upsert('mention_role_id');
+  const setConfigRole = upsert('config_role_id');
   const setTimezoneValue = upsert('timezone');
 
   return {
@@ -55,6 +60,7 @@ export const createGuildSettingsRepository = (db: DatabaseSync): GuildSettingsRe
     },
     setPickupChannel,
     setMentionRole,
+    setConfigRole,
     setTimezone: (guildId, timezone) => {
       setTimezoneValue(guildId, timezone);
     },

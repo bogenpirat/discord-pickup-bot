@@ -34,6 +34,9 @@ export const MIGRATIONS: readonly string[] = [
     PRIMARY KEY (pickup_id, user_id)
   );
   `,
+  `
+  ALTER TABLE guild_settings ADD COLUMN config_role_id TEXT;
+  `,
 ];
 
 const readUserVersion = (db: DatabaseSync): number =>

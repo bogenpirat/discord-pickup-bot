@@ -29,6 +29,19 @@ describe('loadEnv', () => {
     expect(env.NODE_ENV).toBe('development');
   });
 
+  it('has no power users by default', () => {
+    expect(loadEnv(minimal).POWER_USER_IDS).toEqual([]);
+  });
+
+  it.each([
+    ['123', ['123']],
+    ['123,456', ['123', '456']],
+    [' 123 , 456 ', ['123', '456']],
+    ['123,,456,', ['123', '456']],
+  ])('parses POWER_USER_IDS %s', (value, expected) => {
+    expect(loadEnv({ ...minimal, POWER_USER_IDS: value }).POWER_USER_IDS).toEqual(expected);
+  });
+
   it('treats blank values from an env file as unset', () => {
     const env = loadEnv({
       ...minimal,

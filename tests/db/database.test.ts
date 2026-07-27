@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import { openDatabase } from '../../src/db/database.ts';
-import { migrate } from '../../src/db/migrations.ts';
+import { MIGRATIONS, migrate } from '../../src/db/migrations.ts';
 import { asNullableNumber, asNullableText, asNumber, asText } from '../../src/db/rows.ts';
 
 const directories: string[] = [];
@@ -56,6 +56,28 @@ describe('openDatabase', () => {
 });
 
 describe('migrate', () => {
+  it('upgrades an existing database rather than starting over', () => {
+    const db = new DatabaseSync(':memory:');
+    db.exec(MIGRATIONS[0] ?? '');
+    db.exec('PRAGMA user_version = 1');
+    db.prepare('INSERT INTO guild_settings (guild_id, timezone, updated_at) VALUES (?, ?, ?)').run(
+      'g1',
+      'Europe/Berlin',
+      0,
+    );
+
+    migrate(db);
+
+    expect(Number(db.prepare('PRAGMA user_version').all()[0]?.['user_version'])).toBe(
+      MIGRATIONS.length,
+    );
+    const row = db.prepare('SELECT * FROM guild_settings WHERE guild_id = ?').get('g1');
+    expect(row?.['config_role_id']).toBeNull();
+    expect(db.prepare('SELECT COUNT(*) AS c FROM guild_settings').get()?.['c']).toBe(1);
+
+    db.close();
+  });
+
   it('rolls back and rethrows when a migration cannot apply', () => {
     const db = new DatabaseSync(':memory:');
     db.exec('CREATE TABLE guild_settings (guild_id TEXT)');

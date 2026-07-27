@@ -1,6 +1,6 @@
 # Discord Pickup Bot
 
-Coordinates pickup games for a video game. A member calls a pickup with `/pickup`, the bot
+Coordinates pickup games for a video game. A member calls a pickup with `/valo`, the bot
 posts one message to a configured channel, pings a configured role, and keeps a live tally
 of who is **Dabei**, **Wenn mehr**, or **Raus**.
 
@@ -11,17 +11,46 @@ Discord's own locale.
 
 | Command | Who | What |
 |---|---|---|
-| `/pickup [zeit] [notiz]` | everyone | Posts a pickup call to the configured channel |
-| `/pickup-config kanal <#channel>` | Manage Server | Where pickup calls are posted |
-| `/pickup-config rolle [@role]` | Manage Server | Role to mention, omit to clear |
-| `/pickup-config zeitzone <tz>` | Manage Server | IANA zone used to read start times |
-| `/pickup-config anzeigen` | Manage Server | Shows the current configuration |
+| `/valo [info]` | everyone | Posts a pickup call to the configured channel |
+| `/pickup-config kanal <#channel>` | config access | Where pickup calls are posted |
+| `/pickup-config rolle [@role]` | config access | Role to mention, omit to clear |
+| `/pickup-config zeitzone <tz>` | config access | IANA zone used to read start times |
+| `/pickup-config anzeigen` | config access | Shows the current configuration |
+| `/pickup-config admin-rolle [@role]` | **admins only** | Role allowed to use the commands above |
 
-English clients see `/pickup time: note:` and `/pickup-config channel|role|timezone|show`.
+English clients see `/valo info:` and
+`/pickup-config channel|role|timezone|show|admin-role`.
 
-### Start times
+### Who may configure
 
-The `zeit` option is optional and understands German and English:
+*Config access* means any of:
+
+1. **Manage Server** permission, or
+2. a user ID listed in `POWER_USER_IDS` in `.env`, or
+3. holding the role set via `/pickup-config admin-rolle`.
+
+Setting the **admin role itself** is deliberately narrower — only 1 and 2. Otherwise
+anyone holding the admin role could hand it to another role and widen access on their own.
+
+> `/pickup-config` intentionally carries no `default_member_permissions`, because Discord
+> would then *hide* it from power users and admin-role holders entirely. It is visible to
+> everyone and refuses at runtime instead.
+
+### `/valo`
+
+One optional free-text field. Anything you type goes in, and the bot pulls a start time out
+of it opportunistically; whatever is left over becomes the note shown on the message.
+
+| You type | Start time | Note |
+|---|---|---|
+| `/valo` | — | — |
+| `/valo 20:30` | 20:30 | — |
+| `/valo wer hat bock auf ranked um halb 9` | 20:30 | wer hat bock auf ranked |
+| `/valo in 90 Minuten unrated` | now + 90 min | unrated |
+| `/valo morgen 20:30 ranked grind` | tomorrow 20:30 | ranked grind |
+| `/valo brauchen noch 2 leute` | — | brauchen noch 2 leute |
+
+Recognised time formats, German and English:
 
 - `20:30`, `20.30`, `20 Uhr`, `9:05`, `8pm`, `8:30 pm`
 - `halb 9` → 20:30, `viertel nach 8` → 20:15, `viertel vor 9` → 20:45,
@@ -30,10 +59,15 @@ The `zeit` option is optional and understands German and English:
 - `morgen 20:30`, `übermorgen 20 Uhr`, `heute 22:00`, `tomorrow 8pm`
 
 A bare small hour means the evening: `8` is 20:00. Write `8:00` if you really mean the
-morning. A time that has already passed rolls to the next day.
+morning. A time that has already passed rolls to the next day. A filler `um`, `ab` or
+`gegen` in front of the time is dropped from the note.
+
+A **bare number is only read as a time when it is the entire message**, so
+`brauchen noch 2 leute` keeps its `2` instead of calling a game for 14:00. Write `20:30`,
+`20 Uhr` or `halb 9` and it is picked up anywhere in the sentence.
 
 Parsed times render as a Discord timestamp, so everyone sees them in their own timezone.
-Anything the parser cannot read is shown verbatim instead — nothing is ever refused.
+If no time is found, nothing is refused — the whole text simply becomes the note.
 
 ### Responding
 
@@ -101,7 +135,7 @@ Open **OAuth2 → OAuth2 URL Generator**.
 **Scopes** — tick exactly these two:
 
 - `bot`
-- `applications.commands` — required for slash commands; without it `/pickup` never appears
+- `applications.commands` — required for slash commands; without it `/valo` never appears
 
 **Bot Permissions** — tick exactly these four:
 
@@ -134,7 +168,7 @@ to add a bot.
 Server-level permissions can be overridden per channel. In the channel you intend to use,
 **Edit Channel → Permissions**, and confirm the bot's role has **View Channel**,
 **Send Messages**, and **Embed Links** allowed. A red ✗ here silently overrides the
-invite, and `/pickup` will answer *"Ich kann im konfigurierten Kanal nicht schreiben."*
+invite, and `/valo` will answer *"Ich kann im konfigurierten Kanal nicht schreiben."*
 
 Announcement channels also work; forum and voice channels do not.
 
@@ -157,7 +191,13 @@ cp .env.example .env
 DISCORD_TOKEN=the token from step 3
 DISCORD_APP_ID=the id from step 2
 DISCORD_DEV_GUILD_ID=the id from step 8   # optional; blank = register globally
+POWER_USER_IDS=                           # optional; see below
 ```
+
+`POWER_USER_IDS` lists user IDs that may always use `/pickup-config`, regardless of their
+server permissions — useful so you can configure the bot without holding Manage Server.
+One ID, or several separated by commas. Copy an ID by right-clicking a user with Developer
+Mode on (step 8) → **Copy User ID**.
 
 ### 10. Start and register
 
@@ -171,16 +211,17 @@ reports `healthy` within about a minute.
 
 ### 11. Configure the bot in Discord
 
-Run these once per server, as someone with **Manage Server**:
+Run these once per server, as someone with **Manage Server** or a `POWER_USER_IDS` entry:
 
 ```
-/pickup-config kanal   #pickup
-/pickup-config rolle   @Pickup
-/pickup-config zeitzone Europe/Berlin
+/pickup-config kanal       #pickup
+/pickup-config rolle       @Pickup
+/pickup-config zeitzone    Europe/Berlin
+/pickup-config admin-rolle @Orga          # optional; lets that role configure too
 /pickup-config anzeigen
 ```
 
-Then `/pickup zeit:20:30` to try it. If the commands do not appear, see below.
+Then `/valo 20:30` to try it. If the commands do not appear, see below.
 
 ### Troubleshooting
 
@@ -190,7 +231,7 @@ Then `/pickup zeit:20:30` to try it. If the commands do not appear, see below.
 | Commands appear only after a long delay | `DISCORD_DEV_GUILD_ID` was blank, so they registered globally |
 | `Invalid environment configuration` at startup | `DISCORD_TOKEN` or `DISCORD_APP_ID` missing from `.env` |
 | `An invalid token was provided` | Token was reset in the portal, or copied with whitespace |
-| Bot online but `/pickup` says it cannot write | Channel permission override — see step 7 |
+| Bot online but `/valo` says it cannot write | Channel permission override — see step 7 |
 | Message posts but the role is not pinged | Missing *Mention All Roles*, and the role is not mentionable — see step 6 |
 | Embed missing, message looks empty | *Embed Links* not granted |
 

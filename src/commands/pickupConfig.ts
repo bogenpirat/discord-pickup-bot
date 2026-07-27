@@ -3,11 +3,11 @@ import {
   type ChatInputCommandInteraction,
   channelMention,
   InteractionContextType,
-  PermissionFlagsBits,
   roleMention,
   SlashCommandBuilder,
 } from 'discord.js';
 import type { AppContext } from '../app/context.ts';
+import { canManageConfig, canUseConfig } from '../discord/permissions.ts';
 import { replyEphemeral } from '../discord/reply.ts';
 import type { SlashCommand } from '../discord/types.ts';
 import { isValidTimeZone, searchTimeZones } from '../domain/time/timezone.ts';
@@ -17,7 +17,6 @@ const definition = new SlashCommandBuilder()
   .setName('pickup-config')
   .setDescription('Configure the pickup bot for this server')
   .setDescriptionLocalizations({ de: 'Pickup-Bot für diesen Server konfigurieren' })
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .setContexts(InteractionContextType.Guild)
   .addSubcommand((subcommand) =>
     subcommand
@@ -47,6 +46,23 @@ const definition = new SlashCommandBuilder()
           .setNameLocalizations({ de: 'rolle' })
           .setDescription('Role to mention, leave empty to clear')
           .setDescriptionLocalizations({ de: 'Rolle, leer lassen zum Entfernen' })
+          .setRequired(false),
+      ),
+  )
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName('admin-role')
+      .setNameLocalizations({ de: 'admin-rolle' })
+      .setDescription('Set a role that may also use these config commands')
+      .setDescriptionLocalizations({
+        de: 'Rolle festlegen, die diese Config-Befehle ebenfalls nutzen darf',
+      })
+      .addRoleOption((option) =>
+        option
+          .setName('role')
+          .setNameLocalizations({ de: 'rolle' })
+          .setDescription('Role allowed to configure, leave empty to clear')
+          .setDescriptionLocalizations({ de: 'Berechtigte Rolle, leer lassen zum Entfernen' })
           .setRequired(false),
       ),
   )
@@ -84,13 +100,29 @@ const execute = async (
     await replyEphemeral(interaction, strings.guildOnly);
     return;
   }
-  if (interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild) !== true) {
-    await replyEphemeral(interaction, strings.missingPermission);
-    return;
-  }
 
   const guildId = interaction.guildId;
   const subcommand = interaction.options.getSubcommand();
+  const settings = context.settings.get(guildId);
+
+  if (subcommand === 'admin-role') {
+    if (!canManageConfig(interaction, context.powerUserIds)) {
+      await replyEphemeral(interaction, strings.adminOnly);
+      return;
+    }
+    const role = interaction.options.getRole('role');
+    context.settings.setConfigRole(guildId, role?.id ?? null);
+    await replyEphemeral(
+      interaction,
+      role === null ? strings.configAdminRoleCleared : strings.configAdminRoleSaved(role.id),
+    );
+    return;
+  }
+
+  if (!canUseConfig(interaction, settings, context.powerUserIds)) {
+    await replyEphemeral(interaction, strings.missingPermission);
+    return;
+  }
 
   if (subcommand === 'channel') {
     const channel = interaction.options.getChannel('channel', true);
@@ -120,14 +152,18 @@ const execute = async (
     return;
   }
 
-  const settings = context.settings.get(guildId);
   await replyEphemeral(
     interaction,
-    strings.configSummary(
-      settings.pickupChannelId === null ? strings.notSet : channelMention(settings.pickupChannelId),
-      settings.mentionRoleId === null ? strings.notSet : roleMention(settings.mentionRoleId),
-      settings.timezone,
-    ),
+    strings.configSummary({
+      channel:
+        settings.pickupChannelId === null
+          ? strings.notSet
+          : channelMention(settings.pickupChannelId),
+      role: settings.mentionRoleId === null ? strings.notSet : roleMention(settings.mentionRoleId),
+      adminRole:
+        settings.configRoleId === null ? strings.notSet : roleMention(settings.configRoleId),
+      timezone: settings.timezone,
+    }),
   );
 };
 

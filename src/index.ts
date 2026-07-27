@@ -1,0 +1,74 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { Events } from 'discord.js';
+import { createAppContext } from './app/context.ts';
+import { buildButtonRegistry, buildCommandRegistry } from './app/registries.ts';
+import { loadEnv } from './config/env.ts';
+import { openDatabase } from './db/database.ts';
+import { createClient } from './discord/client.ts';
+import { createLogger } from './logger.ts';
+
+const HEARTBEAT_INTERVAL_MS = 30_000;
+
+const env = loadEnv();
+const logger = createLogger(env.LOG_LEVEL, env.NODE_ENV !== 'production');
+
+mkdirSync(dirname(env.DATABASE_PATH), { recursive: true });
+
+const db = openDatabase(env.DATABASE_PATH);
+const context = createAppContext(db, logger);
+const commands = buildCommandRegistry();
+const buttons = buildButtonRegistry();
+const client = createClient();
+
+const beat = (): void => {
+  try {
+    writeFileSync(env.HEARTBEAT_PATH, String(Date.now()));
+  } catch (error) {
+    logger.warn({ err: error }, 'could not write heartbeat');
+  }
+};
+
+client.once(Events.ClientReady, (ready) => {
+  logger.info({ user: ready.user.tag, guilds: ready.guilds.cache.size }, 'logged in');
+  beat();
+});
+
+const heartbeat = setInterval(beat, HEARTBEAT_INTERVAL_MS);
+heartbeat.unref();
+
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (interaction.isChatInputCommand()) {
+    await commands.dispatch(interaction, context);
+    return;
+  }
+  if (interaction.isAutocomplete()) {
+    await commands.dispatchAutocomplete(interaction, context);
+    return;
+  }
+  if (interaction.isButton()) {
+    await buttons.dispatch(interaction, context);
+  }
+});
+
+client.on(Events.Error, (error) => {
+  logger.error({ err: error }, 'discord client error');
+});
+
+const shutdown = (signal: string): void => {
+  logger.info({ signal }, 'shutting down');
+  clearInterval(heartbeat);
+  void client.destroy().finally(() => {
+    db.close();
+    process.exit(0);
+  });
+};
+
+process.on('SIGINT', () => {
+  shutdown('SIGINT');
+});
+process.on('SIGTERM', () => {
+  shutdown('SIGTERM');
+});
+
+await client.login(env.DISCORD_TOKEN);

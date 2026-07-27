@@ -1,0 +1,17 @@
+.tmp
+.git
+.gitignore
+node_modules
+dist
+coverage
+data
+tests
+vitest.config.ts
+biome.json
+.env
+.env.local
+*.log
+*.db
+*.db-shm
+*.db-wal
+README.md

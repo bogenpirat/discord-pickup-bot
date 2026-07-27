@@ -1,0 +1,139 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint, types, tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '26'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint and format check
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Tests with coverage thresholds
+        run: npm run coverage
+
+      - name: Compile
+        run: npm run build
+
+      - name: Verify the deploy script compiled
+        run: test -f dist/scripts/deployCommands.js
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build the image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          tags: discord-pickup-bot:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Validate the compose file
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          docker compose config > /dev/null
+          rm .env
+
+      - name: Fail fast when configuration is missing
+        run: |
+          set -euo pipefail
+          output="$(docker run --rm discord-pickup-bot:ci 2>&1 || true)"
+          printf '%s\n' "$output"
+          printf '%s\n' "$output" | grep -q 'Invalid environment configuration'
+
+      - name: Migrate SQLite on a volume as the non-root user
+        run: |
+          set -euo pipefail
+          docker volume create pickup-ci > /dev/null
+          docker run --rm -v pickup-ci:/data discord-pickup-bot:ci node --input-type=module -e "
+            import { openDatabase } from '/app/dist/db/database.js';
+            const db = openDatabase('/data/pickup.db');
+            const [version] = db.prepare('PRAGMA user_version').all();
+            const [journal] = db.prepare('PRAGMA journal_mode').all();
+            if (Number(version.user_version) < 1) {
+              throw new Error('migrations did not apply');
+            }
+            if (journal.journal_mode !== 'wal') {
+              throw new Error('expected a wal journal, got ' + journal.journal_mode);
+            }
+            db.prepare('INSERT INTO guild_settings (guild_id, timezone, updated_at) VALUES (?, ?, ?)')
+              .run('g1', 'Europe/Berlin', Date.now());
+          "
+          docker run --rm -v pickup-ci:/data discord-pickup-bot:ci node --input-type=module -e "
+            import { openDatabase } from '/app/dist/db/database.js';
+            const db = openDatabase('/data/pickup.db');
+            const [row] = db.prepare('SELECT COUNT(*) AS c FROM guild_settings').all();
+            if (Number(row.c) !== 1) {
+              throw new Error('data did not survive a container restart');
+            }
+          "
+          docker volume rm pickup-ci > /dev/null
+
+      - name: Health check reports unhealthy without a heartbeat
+        run: |
+          set -euo pipefail
+          docker run --rm discord-pickup-bot:ci test -f /app/healthcheck.mjs
+          status=0
+          docker run --rm discord-pickup-bot:ci node /app/healthcheck.mjs || status=$?
+          if [ "$status" -ne 1 ]; then
+            echo "expected exit status 1 from the health check, got $status"
+            exit 1
+          fi
+
+      - name: Health check reports healthy with a fresh heartbeat
+        run: |
+          set -euo pipefail
+          docker run --rm discord-pickup-bot:ci sh -c '
+            node --input-type=module -e "
+              import { writeFileSync } from \"node:fs\";
+              writeFileSync(process.env.HEARTBEAT_PATH ?? \"/tmp/heartbeat\", String(Date.now()));
+            " && node /app/healthcheck.mjs
+          '

@@ -192,6 +192,80 @@ describe('/pickup-config settings', () => {
     expect(message).toContain('Europe/Berlin');
   });
 
+  it.each([
+    ['in', '🔥'],
+    ['later', '<:soon:123456789012345678>'],
+    ['out', '💀'],
+  ])('sets a custom emoji for %s', async (option, emoji) => {
+    const context = createTestContext();
+    const fake = createFakeCommandInteraction({
+      subcommand: 'emoji',
+      manageGuild: true,
+      strings: { option, emoji },
+    });
+
+    await pickupConfigCommand.execute(fake.interaction, context);
+
+    expect(context.settings.get('guild-1').emojis[option as 'in']).toBe(emoji);
+    expect(fake.messages().join(' ')).toContain(emoji);
+  });
+
+  it('resets an emoji when none is given', async () => {
+    const context = createTestContext();
+    context.settings.setChoiceEmoji('guild-1', 'in', '🔥');
+
+    const fake = createFakeCommandInteraction({
+      subcommand: 'emoji',
+      manageGuild: true,
+      strings: { option: 'in' },
+    });
+    await pickupConfigCommand.execute(fake.interaction, context);
+
+    expect(context.settings.get('guild-1').emojis.in).toBeNull();
+    expect(fake.messages().join(' ')).toContain('✅');
+  });
+
+  it('rejects something that is not an emoji', async () => {
+    const context = createTestContext();
+    const fake = createFakeCommandInteraction({
+      subcommand: 'emoji',
+      manageGuild: true,
+      strings: { option: 'in', emoji: 'nope' },
+    });
+
+    await pickupConfigCommand.execute(fake.interaction, context);
+
+    expect(context.settings.get('guild-1').emojis.in).toBeNull();
+    expect(fake.messages().join(' ')).toContain('sieht nicht nach einem Emoji aus');
+  });
+
+  it('rejects an unknown option value', async () => {
+    const context = createTestContext();
+    const fake = createFakeCommandInteraction({
+      subcommand: 'emoji',
+      manageGuild: true,
+      strings: { option: 'sideways', emoji: '🔥' },
+    });
+
+    await pickupConfigCommand.execute(fake.interaction, context);
+
+    expect(context.settings.get('guild-1').emojis.in).toBeNull();
+    expect(fake.messages().join(' ')).toContain('schiefgelaufen');
+  });
+
+  it('shows configured emojis in the summary', async () => {
+    const context = createTestContext();
+    context.settings.setChoiceEmoji('guild-1', 'in', '🔥');
+
+    const fake = createFakeCommandInteraction({ subcommand: 'show', manageGuild: true });
+    await pickupConfigCommand.execute(fake.interaction, context);
+
+    const message = fake.messages().join(' ');
+    expect(message).toContain('🔥 Dabei');
+    expect(message).toContain('🕗 Später');
+    expect(message).toContain('❌ Raus');
+  });
+
   it('autocompletes time zones', async () => {
     const context = createTestContext();
     const fake = createFakeCommandInteraction({ focused: 'berlin', manageGuild: true });

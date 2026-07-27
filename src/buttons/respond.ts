@@ -29,6 +29,7 @@ export const handleRespond = async (
           pickup,
           responses: context.responses.listByPickup(pickup.id),
           mentionRoleId: settings.mentionRoleId,
+          emojis: settings.emojis,
         }),
       );
       await replyEphemeral(interaction, strings.pickupAlreadyClosed);
@@ -52,6 +53,7 @@ export const handleRespond = async (
         pickup,
         responses: applied.responses,
         mentionRoleId: settings.mentionRoleId,
+        emojis: settings.emojis,
       }),
     );
   });

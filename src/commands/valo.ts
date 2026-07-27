@@ -78,6 +78,7 @@ const execute = async (
         pickup,
         responses: [],
         mentionRoleId: settings.mentionRoleId,
+        emojis: settings.emojis,
       }),
     );
     context.pickups.attachMessage(pickupId, message.id);

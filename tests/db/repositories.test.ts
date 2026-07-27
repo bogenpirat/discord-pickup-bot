@@ -57,6 +57,7 @@ describe('guildSettingsRepository', () => {
       pickupChannelId: null,
       mentionRoleId: null,
       configRoleId: null,
+      emojis: { in: null, later: null, out: null },
       timezone: 'Europe/Berlin',
     });
     expect(db.prepare('SELECT COUNT(*) AS c FROM guild_settings').get()?.['c']).toBe(0);
@@ -68,6 +69,7 @@ describe('guildSettingsRepository', () => {
     repository.setPickupChannel(GUILD, 'channel-1');
     repository.setMentionRole(GUILD, 'role-1');
     repository.setConfigRole(GUILD, 'role-admin');
+    repository.setChoiceEmoji(GUILD, 'in', '🔥');
     repository.setTimezone(GUILD, 'UTC');
 
     expect(repository.get(GUILD)).toEqual({
@@ -75,8 +77,33 @@ describe('guildSettingsRepository', () => {
       pickupChannelId: 'channel-1',
       mentionRoleId: 'role-1',
       configRoleId: 'role-admin',
+      emojis: { in: '🔥', later: null, out: null },
       timezone: 'UTC',
     });
+  });
+
+  it('stores an emoji per choice independently', () => {
+    const repository = createGuildSettingsRepository(db);
+
+    repository.setChoiceEmoji(GUILD, 'in', '🔥');
+    repository.setChoiceEmoji(GUILD, 'later', '<:soon:123456789012345678>');
+    repository.setChoiceEmoji(GUILD, 'out', '💀');
+
+    expect(repository.get(GUILD).emojis).toEqual({
+      in: '🔥',
+      later: '<:soon:123456789012345678>',
+      out: '💀',
+    });
+  });
+
+  it('resets a single emoji back to null', () => {
+    const repository = createGuildSettingsRepository(db);
+
+    repository.setChoiceEmoji(GUILD, 'in', '🔥');
+    repository.setChoiceEmoji(GUILD, 'out', '💀');
+    repository.setChoiceEmoji(GUILD, 'in', null);
+
+    expect(repository.get(GUILD).emojis).toEqual({ in: null, later: null, out: '💀' });
   });
 
   it('clears the config role', () => {

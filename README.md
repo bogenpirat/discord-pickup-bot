@@ -14,12 +14,34 @@ Discord's own locale.
 | `/valo [info]` | everyone | Posts a pickup call to the configured channel |
 | `/pickup-config kanal <#channel>` | config access | Where pickup calls are posted |
 | `/pickup-config rolle [@role]` | config access | Role to mention, omit to clear |
+| `/pickup-config emoji <option> [emoji]` | config access | Icon shown for one option, omit to reset |
 | `/pickup-config zeitzone <tz>` | config access | IANA zone used to read start times |
 | `/pickup-config anzeigen` | config access | Shows the current configuration |
 | `/pickup-config admin-rolle [@role]` | **admins only** | Role allowed to use the commands above |
 
 English clients see `/valo info:` and
-`/pickup-config channel|role|timezone|show|admin-role`.
+`/pickup-config channel|role|timezone|emoji|show|admin-role`.
+
+### Icons
+
+Each of the three options shows an icon in the listing, defaulting to ✅ / 🕗 / ❌. Any of
+them can be replaced per server:
+
+```
+/pickup-config emoji option:Dabei  emoji:🔥
+/pickup-config emoji option:Später emoji:<:soon:123456789012345678>
+/pickup-config emoji option:Raus                     ← omit to reset to the default
+```
+
+Both unicode emoji (including flags, keycaps and skin-tone variants) and custom server
+emoji in `<:name:id>` / `<a:name:id>` form are accepted; anything else is refused with a
+hint. Use emoji from **your own server**, since Discord will not render another server's
+custom emoji for your members.
+
+The icon appears both as the button decoration and in front of the field header, so
+`✅ Dabei · 4` on the button matches `✅ Dabei (4)` in the listing. If a stored value ever
+stops being a valid emoji, that option quietly falls back to its default rather than
+breaking the message.
 
 ### Who may configure
 
@@ -218,6 +240,7 @@ Run these once per server, as someone with **Manage Server** or a `POWER_USER_ID
 /pickup-config rolle       @Pickup
 /pickup-config zeitzone    Europe/Berlin
 /pickup-config admin-rolle @Orga          # optional; lets that role configure too
+/pickup-config emoji       option:Dabei emoji:🔥   # optional; defaults are ✅ 🕗 ❌
 /pickup-config anzeigen
 ```
 

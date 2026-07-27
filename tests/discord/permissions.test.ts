@@ -8,6 +8,7 @@ import {
   isPowerUser,
   memberRoleIds,
 } from '../../src/discord/permissions.ts';
+import { NO_CHOICE_EMOJIS } from '../../src/domain/pickupChoice.ts';
 import { createFakeCommandInteraction } from '../helpers/fakes.ts';
 
 const settings = (configRoleId: string | null): GuildSettings => ({
@@ -15,6 +16,7 @@ const settings = (configRoleId: string | null): GuildSettings => ({
   pickupChannelId: null,
   mentionRoleId: null,
   configRoleId,
+  emojis: NO_CHOICE_EMOJIS,
   timezone: 'Europe/Berlin',
 });
 

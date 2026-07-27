@@ -1,4 +1,9 @@
 import type { DatabaseSync } from 'node:sqlite';
+import {
+  type ChoiceEmojis,
+  NO_CHOICE_EMOJIS,
+  type PickupChoice,
+} from '../../domain/pickupChoice.ts';
 import { DEFAULT_TIME_ZONE } from '../../domain/time/timezone.ts';
 import { asNullableText, asText, type SqlRow } from '../rows.ts';
 
@@ -7,14 +12,22 @@ export interface GuildSettings {
   readonly pickupChannelId: string | null;
   readonly mentionRoleId: string | null;
   readonly configRoleId: string | null;
+  readonly emojis: ChoiceEmojis;
   readonly timezone: string;
 }
+
+const EMOJI_COLUMNS: Readonly<Record<PickupChoice, string>> = {
+  in: 'emoji_in',
+  later: 'emoji_later',
+  out: 'emoji_out',
+};
 
 export interface GuildSettingsRepository {
   get(guildId: string): GuildSettings;
   setPickupChannel(guildId: string, channelId: string | null): void;
   setMentionRole(guildId: string, roleId: string | null): void;
   setConfigRole(guildId: string, roleId: string | null): void;
+  setChoiceEmoji(guildId: string, choice: PickupChoice, emoji: string | null): void;
   setTimezone(guildId: string, timezone: string): void;
 }
 
@@ -23,6 +36,7 @@ const defaults = (guildId: string): GuildSettings => ({
   pickupChannelId: null,
   mentionRoleId: null,
   configRoleId: null,
+  emojis: NO_CHOICE_EMOJIS,
   timezone: DEFAULT_TIME_ZONE,
 });
 
@@ -31,6 +45,11 @@ const toSettings = (row: SqlRow): GuildSettings => ({
   pickupChannelId: asNullableText(row['pickup_channel_id']),
   mentionRoleId: asNullableText(row['mention_role_id']),
   configRoleId: asNullableText(row['config_role_id']),
+  emojis: {
+    in: asNullableText(row[EMOJI_COLUMNS.in]),
+    later: asNullableText(row[EMOJI_COLUMNS.later]),
+    out: asNullableText(row[EMOJI_COLUMNS.out]),
+  },
   timezone: asText(row['timezone']),
 });
 
@@ -52,6 +71,12 @@ export const createGuildSettingsRepository = (db: DatabaseSync): GuildSettingsRe
   const setMentionRole = upsert('mention_role_id');
   const setConfigRole = upsert('config_role_id');
   const setTimezoneValue = upsert('timezone');
+  const setEmoji: Readonly<Record<PickupChoice, (guildId: string, emoji: string | null) => void>> =
+    {
+      in: upsert(EMOJI_COLUMNS.in),
+      later: upsert(EMOJI_COLUMNS.later),
+      out: upsert(EMOJI_COLUMNS.out),
+    };
 
   return {
     get: (guildId) => {
@@ -61,6 +86,9 @@ export const createGuildSettingsRepository = (db: DatabaseSync): GuildSettingsRe
     setPickupChannel,
     setMentionRole,
     setConfigRole,
+    setChoiceEmoji: (guildId, choice, emoji) => {
+      setEmoji[choice](guildId, emoji);
+    },
     setTimezone: (guildId, timezone) => {
       setTimezoneValue(guildId, timezone);
     },

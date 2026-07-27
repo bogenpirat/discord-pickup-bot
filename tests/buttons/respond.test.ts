@@ -28,7 +28,8 @@ const labelsOf = (payload: unknown): string[] => {
   return components[0]
     ? components[0]
         .toJSON()
-        .components.map((component) =>
+        .components.slice(0, 3)
+        .map((component) =>
           typeof component === 'object' && component !== null && 'label' in component
             ? String((component as { label: unknown }).label)
             : '',

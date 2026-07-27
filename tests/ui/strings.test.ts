@@ -45,10 +45,15 @@ describe('string tables', () => {
 
     expect(strings.configAdminRoleSaved('r2')).toContain('<@&r2>');
 
+    expect(strings.configEmojiSaved('Dabei', '🔥')).toContain('🔥');
+    expect(strings.configEmojiReset('Dabei', '✅')).toContain('✅');
+    expect(strings.invalidEmoji('nope')).toContain('nope');
+
     const summary = strings.configSummary({
       channel: '<#c1>',
       role: '<@&r1>',
       adminRole: '<@&r2>',
+      emojis: '✅ Dabei',
       timezone: 'UTC',
     });
     expect(summary).toContain('<#c1>');
@@ -60,6 +65,5 @@ describe('string tables', () => {
   it.each([...APP_LOCALES])('covers all three choices for %s', (locale) => {
     const strings = stringsFor(locale);
     expect(Object.keys(strings.choice).sort()).toEqual(['in', 'later', 'out']);
-    expect(Object.keys(strings.choiceField).sort()).toEqual(['in', 'later', 'out']);
   });
 });

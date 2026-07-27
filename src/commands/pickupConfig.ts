@@ -10,6 +10,13 @@ import type { AppContext } from '../app/context.ts';
 import { canManageConfig, canUseConfig } from '../discord/permissions.ts';
 import { replyEphemeral } from '../discord/reply.ts';
 import type { SlashCommand } from '../discord/types.ts';
+import { parseEmoji } from '../domain/emoji.ts';
+import {
+  DEFAULT_CHOICE_EMOJI,
+  emojiFor,
+  isPickupChoice,
+  PICKUP_CHOICES,
+} from '../domain/pickupChoice.ts';
 import { isValidTimeZone, searchTimeZones } from '../domain/time/timezone.ts';
 import { resolveLocale, stringsFor } from '../ui/strings.ts';
 
@@ -63,6 +70,38 @@ const definition = new SlashCommandBuilder()
           .setNameLocalizations({ de: 'rolle' })
           .setDescription('Role allowed to configure, leave empty to clear')
           .setDescriptionLocalizations({ de: 'Berechtigte Rolle, leer lassen zum Entfernen' })
+          .setRequired(false),
+      ),
+  )
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName('emoji')
+      .setDescription('Set the emoji shown for one of the three options')
+      .setDescriptionLocalizations({
+        de: 'Emoji für eine der drei Optionen festlegen',
+      })
+      .addStringOption((option) =>
+        option
+          .setName('option')
+          .setNameLocalizations({ de: 'option' })
+          .setDescription('Which of the three options')
+          .setDescriptionLocalizations({ de: 'Welche der drei Optionen' })
+          .addChoices(
+            { name: 'Dabei', value: 'in' },
+            { name: 'Später', value: 'later' },
+            { name: 'Raus', value: 'out' },
+          )
+          .setRequired(true),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('emoji')
+          .setNameLocalizations({ de: 'emoji' })
+          .setDescription('Emoji to use, leave empty to reset to the default')
+          .setDescriptionLocalizations({
+            de: 'Emoji, leer lassen für das Standard-Emoji',
+          })
+          .setMaxLength(64)
           .setRequired(false),
       ),
   )
@@ -141,6 +180,36 @@ const execute = async (
     return;
   }
 
+  if (subcommand === 'emoji') {
+    const choice = interaction.options.getString('option', true);
+    if (!isPickupChoice(choice)) {
+      await replyEphemeral(interaction, strings.unexpectedError);
+      return;
+    }
+
+    const label = strings.choice[choice];
+    const raw = interaction.options.getString('emoji');
+
+    if (raw === null || raw.trim() === '') {
+      context.settings.setChoiceEmoji(guildId, choice, null);
+      await replyEphemeral(
+        interaction,
+        strings.configEmojiReset(label, DEFAULT_CHOICE_EMOJI[choice]),
+      );
+      return;
+    }
+
+    const parsed = parseEmoji(raw);
+    if (!parsed.ok) {
+      await replyEphemeral(interaction, strings.invalidEmoji(raw.trim()));
+      return;
+    }
+
+    context.settings.setChoiceEmoji(guildId, choice, parsed.value);
+    await replyEphemeral(interaction, strings.configEmojiSaved(label, parsed.value));
+    return;
+  }
+
   if (subcommand === 'timezone') {
     const timezone = interaction.options.getString('timezone', true).trim();
     if (!isValidTimeZone(timezone)) {
@@ -162,6 +231,9 @@ const execute = async (
       role: settings.mentionRoleId === null ? strings.notSet : roleMention(settings.mentionRoleId),
       adminRole:
         settings.configRoleId === null ? strings.notSet : roleMention(settings.configRoleId),
+      emojis: PICKUP_CHOICES.map(
+        (choice) => `${emojiFor(choice, settings.emojis)} ${strings.choice[choice]}`,
+      ).join('  ·  '),
       timezone: settings.timezone,
     }),
   );

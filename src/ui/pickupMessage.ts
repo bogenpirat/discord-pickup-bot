@@ -10,7 +10,13 @@ import {
 } from 'discord.js';
 import type { PickupRecord } from '../db/repositories/pickupRepository.ts';
 import { encodeClose, encodeRespond } from '../discord/customId.ts';
-import { PICKUP_CHOICES, type PickupChoice } from '../domain/pickupChoice.ts';
+import {
+  type ChoiceEmojis,
+  emojiFor,
+  NO_CHOICE_EMOJIS,
+  PICKUP_CHOICES,
+  type PickupChoice,
+} from '../domain/pickupChoice.ts';
 import { groupByChoice, type ResponseSet, tally } from '../domain/pickupState.ts';
 import { type AppLocale, DEFAULT_LOCALE, type Strings, stringsFor } from './strings.ts';
 
@@ -27,6 +33,7 @@ export interface PickupView {
   readonly pickup: PickupRecord;
   readonly responses: ResponseSet;
   readonly mentionRoleId: string | null;
+  readonly emojis?: ChoiceEmojis;
   readonly locale?: AppLocale;
 }
 
@@ -81,10 +88,12 @@ const buildEmbed = (view: PickupView, strings: Strings): EmbedBuilder => {
 
   embed.setDescription(lines.join('\n'));
 
+  const emojis = view.emojis ?? NO_CHOICE_EMOJIS;
+
   for (const choice of PICKUP_CHOICES) {
     const group = groups[choice];
     embed.addFields({
-      name: `${strings.choiceField[choice]} (${group.length})`,
+      name: `${emojiFor(choice, emojis)} ${strings.choice[choice]} (${group.length})`,
       value: renderNames(group, strings),
       inline: true,
     });
@@ -96,18 +105,17 @@ const buildEmbed = (view: PickupView, strings: Strings): EmbedBuilder => {
 const buildComponents = (view: PickupView, strings: Strings): ActionRowBuilder<ButtonBuilder>[] => {
   const counts = tally(view.responses);
   const disabled = view.pickup.status === 'closed';
+  const emojis = view.emojis ?? NO_CHOICE_EMOJIS;
 
-  const responseRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     ...PICKUP_CHOICES.map((choice) =>
       new ButtonBuilder()
         .setCustomId(encodeRespond(choice, view.pickup.id))
         .setLabel(`${strings.choice[choice]} · ${counts[choice]}`)
         .setStyle(BUTTON_STYLES[choice])
+        .setEmoji(emojiFor(choice, emojis))
         .setDisabled(disabled),
     ),
-  );
-
-  const closeRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId(encodeClose(view.pickup.id))
       .setLabel(strings.closeButton)
@@ -115,7 +123,7 @@ const buildComponents = (view: PickupView, strings: Strings): ActionRowBuilder<B
       .setDisabled(disabled),
   );
 
-  return [responseRow, closeRow];
+  return [row];
 };
 
 export const renderPickupMessage = (view: PickupView): PickupMessagePayload => {

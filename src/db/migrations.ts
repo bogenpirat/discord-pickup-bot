@@ -37,6 +37,11 @@ export const MIGRATIONS: readonly string[] = [
   `
   ALTER TABLE guild_settings ADD COLUMN config_role_id TEXT;
   `,
+  `
+  ALTER TABLE guild_settings ADD COLUMN emoji_in TEXT;
+  ALTER TABLE guild_settings ADD COLUMN emoji_later TEXT;
+  ALTER TABLE guild_settings ADD COLUMN emoji_out TEXT;
+  `,
 ];
 
 const readUserVersion = (db: DatabaseSync): number =>

@@ -49,7 +49,14 @@ describe('button rendering', () => {
       ?.toJSON()
       .components.map((component) => ('label' in component ? component.label : undefined));
 
-    expect(labels).toEqual(['Dabei · 4', 'Später · 0', 'Raus · 2']);
+    expect(labels).toEqual(['Dabei · 4', 'Später · 0', 'Raus · 2', 'Schließen']);
+  });
+
+  it('puts all four buttons in a single action row', () => {
+    const payload = render({ pickup: pickup(), responses: [], mentionRoleId: null });
+
+    expect(payload.components).toHaveLength(1);
+    expect(payload.components[0]?.toJSON().components).toHaveLength(4);
   });
 
   it('encodes a decodable custom id on every button', () => {
@@ -174,6 +181,136 @@ describe('name lists', () => {
     const fields = payload.embeds[0]?.toJSON().fields ?? [];
     expect(fields[0]?.name).toBe('✅ Dabei (3)');
     expect(fields[2]?.name).toBe('❌ Raus (0)');
+  });
+});
+
+describe('configurable emojis', () => {
+  const fieldNames = (emojis?: Parameters<typeof renderPickupMessage>[0]['emojis']) => {
+    const payload = render({
+      pickup: pickup(),
+      responses: [],
+      mentionRoleId: null,
+      ...(emojis === undefined ? {} : { emojis }),
+    });
+    return (payload.embeds[0]?.toJSON().fields ?? []).map((field) => field.name);
+  };
+
+  it('uses the defaults when nothing is configured', () => {
+    expect(fieldNames()).toEqual(['✅ Dabei (0)', '🕗 Später (0)', '❌ Raus (0)']);
+  });
+
+  it('uses the defaults when every choice is null', () => {
+    expect(fieldNames({ in: null, later: null, out: null })).toEqual([
+      '✅ Dabei (0)',
+      '🕗 Später (0)',
+      '❌ Raus (0)',
+    ]);
+  });
+
+  it('replaces only the configured icons', () => {
+    expect(fieldNames({ in: '🔥', later: null, out: '💀' })).toEqual([
+      '🔥 Dabei (0)',
+      '🕗 Später (0)',
+      '💀 Raus (0)',
+    ]);
+  });
+
+  it('renders a custom server emoji verbatim', () => {
+    expect(fieldNames({ in: '<:valorant:123456789012345678>', later: null, out: null })[0]).toBe(
+      '<:valorant:123456789012345678> Dabei (0)',
+    );
+  });
+
+  const buttonEmojis = (emojis?: Parameters<typeof renderPickupMessage>[0]['emojis']) => {
+    const payload = render({
+      pickup: pickup(),
+      responses: [],
+      mentionRoleId: null,
+      ...(emojis === undefined ? {} : { emojis }),
+    });
+    return (payload.components[0]?.toJSON().components ?? [])
+      .slice(0, 3)
+      .map((component) => ('emoji' in component ? component.emoji : undefined));
+  };
+
+  it('decorates the buttons with the default emoji', () => {
+    expect(buttonEmojis()).toEqual([
+      { name: '✅', animated: false },
+      { name: '🕗', animated: false },
+      { name: '❌', animated: false },
+    ]);
+  });
+
+  it('decorates the buttons with configured emoji', () => {
+    expect(buttonEmojis({ in: '🔥', later: null, out: '💀' })).toEqual([
+      { name: '🔥', animated: false },
+      { name: '🕗', animated: false },
+      { name: '💀', animated: false },
+    ]);
+  });
+
+  it('resolves a custom server emoji on a button', () => {
+    expect(
+      buttonEmojis({ in: '<:valorant:123456789012345678>', later: null, out: null })[0],
+    ).toEqual({ id: '123456789012345678', name: 'valorant', animated: false });
+  });
+
+  it('resolves an animated custom emoji on a button', () => {
+    expect(buttonEmojis({ in: '<a:spin:123456789012345678>', later: null, out: null })[0]).toEqual({
+      id: '123456789012345678',
+      name: 'spin',
+      animated: true,
+    });
+  });
+
+  it('keeps the plain text labels alongside the emoji', () => {
+    const payload = render({
+      pickup: pickup(),
+      responses: [],
+      mentionRoleId: null,
+      emojis: { in: '🔥', later: null, out: null },
+    });
+    const labels = payload.components[0]
+      ?.toJSON()
+      .components.slice(0, 3)
+      .map((component) => ('label' in component ? component.label : undefined));
+
+    expect(labels).toEqual(['Dabei · 0', 'Später · 0', 'Raus · 0']);
+  });
+
+  it.each(['not-an-emoji', '', '<:broken>', ':)'])(
+    'falls back to the default when the stored value %s is not an emoji',
+    (stored) => {
+      const payload = render({
+        pickup: pickup(),
+        responses: [],
+        mentionRoleId: null,
+        emojis: { in: stored, later: null, out: null },
+      });
+      const first = payload.components[0]?.toJSON().components[0];
+
+      expect(first !== undefined && 'emoji' in first ? first.emoji : undefined).toEqual({
+        name: '✅',
+        animated: false,
+      });
+      expect(payload.embeds[0]?.toJSON().fields?.[0]?.name).toBe('✅ Dabei (0)');
+    },
+  );
+
+  it('leaves the close button undecorated at the end of the row', () => {
+    const payload = render({
+      pickup: pickup(),
+      responses: [],
+      mentionRoleId: null,
+      emojis: { in: '🔥', later: '💀', out: '⛔' },
+    });
+    const row = payload.components[0]?.toJSON().components ?? [];
+    const close = row[3];
+
+    expect(row).toHaveLength(4);
+    expect(close).toBeDefined();
+    expect(close !== undefined && 'label' in close ? close.label : '').toBe('Schließen');
+    expect(close !== undefined && 'emoji' in close ? close.emoji : undefined).toBeUndefined();
   });
 });
 

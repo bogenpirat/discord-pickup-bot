@@ -11,7 +11,6 @@ export const resolveLocale = (discordLocale: string | null | undefined): AppLoca
 
 export interface Strings {
   readonly choice: Readonly<Record<PickupChoice, string>>;
-  readonly choiceField: Readonly<Record<PickupChoice, string>>;
   readonly closeButton: string;
   readonly title: string;
   readonly noneYet: string;
@@ -35,6 +34,9 @@ export interface Strings {
   readonly configAdminRoleSaved: (roleId: string) => string;
   readonly configAdminRoleCleared: string;
   readonly configTimezoneSaved: (timezone: string) => string;
+  readonly configEmojiSaved: (label: string, emoji: string) => string;
+  readonly configEmojiReset: (label: string, emoji: string) => string;
+  readonly invalidEmoji: (value: string) => string;
   readonly configSummary: (parts: ConfigSummaryParts) => string;
   readonly notSet: string;
   readonly posted: (url: string) => string;
@@ -47,12 +49,12 @@ export interface ConfigSummaryParts {
   readonly channel: string;
   readonly role: string;
   readonly adminRole: string;
+  readonly emojis: string;
   readonly timezone: string;
 }
 
 const de: Strings = {
   choice: { in: 'Dabei', later: 'Später', out: 'Raus' },
-  choiceField: { in: '✅ Dabei', later: '🕗 Später', out: '❌ Raus' },
   closeButton: 'Schließen',
   title: 'Pickup',
   noneYet: '—',
@@ -80,8 +82,12 @@ const de: Strings = {
   configAdminRoleSaved: (roleId) => `<@&${roleId}> darf jetzt die Config-Befehle nutzen.`,
   configAdminRoleCleared: 'Es ist keine Admin-Rolle mehr gesetzt.',
   configTimezoneSaved: (timezone) => `Zeitzone ist jetzt \`${timezone}\`.`,
+  configEmojiSaved: (label, emoji) => `${emoji} wird jetzt für „${label}“ angezeigt.`,
+  configEmojiReset: (label, emoji) => `„${label}“ nutzt wieder das Standard-Emoji ${emoji}.`,
+  invalidEmoji: (value) =>
+    `„${value}“ sieht nicht nach einem Emoji aus. Nutze ein Unicode-Emoji oder ein Server-Emoji wie \`<:name:123456789012345678>\`.`,
   configSummary: (parts) =>
-    `**Kanal:** ${parts.channel}\n**Rolle:** ${parts.role}\n**Admin-Rolle:** ${parts.adminRole}\n**Zeitzone:** \`${parts.timezone}\``,
+    `**Kanal:** ${parts.channel}\n**Rolle:** ${parts.role}\n**Admin-Rolle:** ${parts.adminRole}\n**Emojis:** ${parts.emojis}\n**Zeitzone:** \`${parts.timezone}\``,
   notSet: 'nicht gesetzt',
   posted: (url) => `Pickup gepostet: ${url}`,
   timeNotUnderstood:
@@ -93,7 +99,6 @@ const de: Strings = {
 
 const en: Strings = {
   choice: { in: 'In', later: 'Later', out: 'Out' },
-  choiceField: { in: '✅ In', later: '🕗 Later', out: '❌ Out' },
   closeButton: 'Close',
   title: 'Pickup',
   noneYet: '—',
@@ -118,8 +123,12 @@ const en: Strings = {
   configAdminRoleSaved: (roleId) => `<@&${roleId}> may now use the config commands.`,
   configAdminRoleCleared: 'No admin role is set any more.',
   configTimezoneSaved: (timezone) => `Time zone is now \`${timezone}\`.`,
+  configEmojiSaved: (label, emoji) => `${emoji} is now shown for "${label}".`,
+  configEmojiReset: (label, emoji) => `"${label}" is back to its default emoji ${emoji}.`,
+  invalidEmoji: (value) =>
+    `"${value}" does not look like an emoji. Use a unicode emoji or a server emoji such as \`<:name:123456789012345678>\`.`,
   configSummary: (parts) =>
-    `**Channel:** ${parts.channel}\n**Role:** ${parts.role}\n**Admin role:** ${parts.adminRole}\n**Time zone:** \`${parts.timezone}\``,
+    `**Channel:** ${parts.channel}\n**Role:** ${parts.role}\n**Admin role:** ${parts.adminRole}\n**Emojis:** ${parts.emojis}\n**Time zone:** \`${parts.timezone}\``,
   notSet: 'not set',
   posted: (url) => `Pickup posted: ${url}`,
   timeNotUnderstood:

@@ -42,6 +42,7 @@ export const handleClose = async (
         pickup: closed,
         responses: context.responses.listByPickup(pickup.id),
         mentionRoleId: settings.mentionRoleId,
+        emojis: settings.emojis,
       }),
     );
   });

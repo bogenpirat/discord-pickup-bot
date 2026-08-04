@@ -5,8 +5,9 @@ posts one message to a configured channel, pings a configured role, and keeps a 
 of who is **Dabei**, **Später** (joining later), or **Raus**.
 
 It also watches a configured channel for Steam store links to unreleased games. When one
-is posted, the bot tracks the game's release date and, once it actually launches, replies
-to that message announcing it, with the German-region price if Steam lists one.
+is posted, the bot reacts with 👀 and tracks the game's release date; once it actually
+launches, it replies to that message announcing it, with the German-region price if Steam
+lists one.
 
 German is the default language; English speakers get English command names and replies via
 Discord's own locale.
@@ -169,20 +170,21 @@ Open **OAuth2 → OAuth2 URL Generator**.
 - `bot`
 - `applications.commands` — required for slash commands; without it `/valo` never appears
 
-**Bot Permissions** — tick exactly these four:
+**Bot Permissions** — tick exactly these five:
 
 | Permission | Bit | Needed for |
 |---|---|---|
-| View Channel | 1024 | Seeing the configured pickup channel |
-| Send Messages | 2048 | Posting the pickup call |
-| Embed Links | 16384 | The embed holding the tally — without it the message posts empty |
+| View Channel | 1024 | Seeing the configured pickup and Steam-watch channels |
+| Send Messages | 2048 | Posting the pickup call and Steam release announcements |
+| Embed Links | 16384 | The embeds holding the tally and the release announcement — without it those messages post empty |
+| Add Reactions | 64 | Reacting 👀 on a message once the bot starts watching its Steam link |
 | Mention @everyone, @here, and All Roles | 131072 | Pinging a role that is not itself mentionable (see below) |
 
-That totals **`150528`**. Copy the generated URL at the bottom of the page, or build it
+That totals **`150592`**. Copy the generated URL at the bottom of the page, or build it
 yourself — substitute your Application ID:
 
 ```
-https://discord.com/oauth2/authorize?client_id=YOUR_APP_ID&scope=bot%20applications.commands&permissions=150528
+https://discord.com/oauth2/authorize?client_id=YOUR_APP_ID&scope=bot%20applications.commands&permissions=150592
 ```
 
 Open the URL, pick your server, **Authorize**. You need **Manage Server** on that server

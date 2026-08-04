@@ -18,13 +18,17 @@ export interface DetectedGame {
 const today = (context: AppContext): Temporal.PlainDate =>
   context.now().toZonedDateTimeISO(DEFAULT_TIME_ZONE).toPlainDate();
 
+/**
+ * Returns whether a watch was newly created, so the caller can react to the
+ * source message only when the bot actually starts watching the game.
+ */
 export const recordDetectedGame = async (
   context: AppContext,
   steamClient: SteamClient,
   input: DetectedGame,
-): Promise<void> => {
+): Promise<boolean> => {
   if (context.steamWatches.findByGuildAndApp(input.guildId, input.appId) !== undefined) {
-    return;
+    return false;
   }
 
   const lookup = await steamClient.getAppDetails(input.appId);
@@ -41,11 +45,11 @@ export const recordDetectedGame = async (
       releaseDateText: null,
       nextCheckAt: nextRetryCheck(context.now()).epochMilliseconds,
     });
-    return;
+    return true;
   }
 
   if (lookup.kind === 'invalid') {
-    return;
+    return false;
   }
 
   const classification = classifyRelease(
@@ -54,7 +58,7 @@ export const recordDetectedGame = async (
     today(context),
   );
   if (classification.kind === 'released') {
-    return;
+    return false;
   }
 
   const nextCheckAt =
@@ -76,6 +80,7 @@ export const recordDetectedGame = async (
     releaseDateText: lookup.details.releaseDateText,
     nextCheckAt: nextCheckAt.epochMilliseconds,
   });
+  return true;
 };
 
 const retryAnnounceLater = (context: AppContext, row: SteamWatchRecord): void => {

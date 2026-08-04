@@ -7,10 +7,10 @@
     "node": ">=26"
   },
   "scripts": {
-    "dev": "node --watch src/index.ts",
+    "dev": "node --env-file=.env --watch src/index.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
-    "deploy": "node src/scripts/deployCommands.ts",
+    "deploy": "node --env-file=.env src/scripts/deployCommands.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",

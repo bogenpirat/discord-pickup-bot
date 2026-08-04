@@ -54,23 +54,34 @@ const detectInput = { guildId: GUILD, channelId: CHANNEL, messageId: MESSAGE, ap
 describe('recordDetectedGame', () => {
   it('disregards an already-released game without persisting anything', async () => {
     const context = createTestContext(NOW);
-    await recordDetectedGame(
+    const started = await recordDetectedGame(
       context,
       fakeSteamClient({ kind: 'found', details: details({ comingSoon: false }) }),
       detectInput,
     );
+    expect(started).toBe(false);
     expect(context.steamWatches.findByGuildAndApp(GUILD, APP_ID)).toBeUndefined();
   });
 
   it('disregards an invalid app id without persisting anything', async () => {
     const context = createTestContext(NOW);
-    await recordDetectedGame(context, fakeSteamClient({ kind: 'invalid' }), detectInput);
+    const started = await recordDetectedGame(
+      context,
+      fakeSteamClient({ kind: 'invalid' }),
+      detectInput,
+    );
+    expect(started).toBe(false);
     expect(context.steamWatches.findByGuildAndApp(GUILD, APP_ID)).toBeUndefined();
   });
 
   it('persists a placeholder pending row on a transient fetch error, retried within an hour', async () => {
     const context = createTestContext(NOW);
-    await recordDetectedGame(context, fakeSteamClient({ kind: 'error' }), detectInput);
+    const started = await recordDetectedGame(
+      context,
+      fakeSteamClient({ kind: 'error' }),
+      detectInput,
+    );
+    expect(started).toBe(true);
 
     const row = context.steamWatches.findByGuildAndApp(GUILD, APP_ID);
     expect(row?.status).toBe('pending');
@@ -81,11 +92,12 @@ describe('recordDetectedGame', () => {
 
   it('persists a scheduled row for a concrete future date', async () => {
     const context = createTestContext(NOW);
-    await recordDetectedGame(
+    const started = await recordDetectedGame(
       context,
       fakeSteamClient({ kind: 'found', details: details({ releaseDateText: '14 Aug, 2026' }) }),
       detectInput,
     );
+    expect(started).toBe(true);
 
     const row = context.steamWatches.findByGuildAndApp(GUILD, APP_ID);
     expect(row?.status).toBe('scheduled');
@@ -95,11 +107,12 @@ describe('recordDetectedGame', () => {
 
   it('persists a pending row for an unparseable date, rechecked in a week', async () => {
     const context = createTestContext(NOW);
-    await recordDetectedGame(
+    const started = await recordDetectedGame(
       context,
       fakeSteamClient({ kind: 'found', details: details({ releaseDateText: 'Q2 2026' }) }),
       detectInput,
     );
+    expect(started).toBe(true);
 
     const row = context.steamWatches.findByGuildAndApp(GUILD, APP_ID);
     expect(row?.status).toBe('pending');
@@ -115,9 +128,13 @@ describe('recordDetectedGame', () => {
     await recordDetectedGame(context, steamClient, detectInput);
     const first = context.steamWatches.findByGuildAndApp(GUILD, APP_ID);
 
-    await recordDetectedGame(context, steamClient, { ...detectInput, messageId: 'message-2' });
+    const startedAgain = await recordDetectedGame(context, steamClient, {
+      ...detectInput,
+      messageId: 'message-2',
+    });
     const second = context.steamWatches.findByGuildAndApp(GUILD, APP_ID);
 
+    expect(startedAgain).toBe(false);
     expect(second?.messageId).toBe(first?.messageId);
     expect(context.steamWatches.listByGuild(GUILD)).toHaveLength(1);
   });

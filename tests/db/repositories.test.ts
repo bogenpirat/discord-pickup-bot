@@ -59,6 +59,7 @@ describe('guildSettingsRepository', () => {
       configRoleId: null,
       emojis: { in: null, later: null, out: null },
       timezone: 'Europe/Berlin',
+      steamWatchChannelId: null,
     });
     expect(db.prepare('SELECT COUNT(*) AS c FROM guild_settings').get()?.['c']).toBe(0);
   });
@@ -71,6 +72,7 @@ describe('guildSettingsRepository', () => {
     repository.setConfigRole(GUILD, 'role-admin');
     repository.setChoiceEmoji(GUILD, 'in', '🔥');
     repository.setTimezone(GUILD, 'UTC');
+    repository.setSteamWatchChannel(GUILD, 'channel-steam');
 
     expect(repository.get(GUILD)).toEqual({
       guildId: GUILD,
@@ -79,6 +81,7 @@ describe('guildSettingsRepository', () => {
       configRoleId: 'role-admin',
       emojis: { in: '🔥', later: null, out: null },
       timezone: 'UTC',
+      steamWatchChannelId: 'channel-steam',
     });
   });
 
@@ -128,6 +131,13 @@ describe('guildSettingsRepository', () => {
     repository.setMentionRole(GUILD, 'role-1');
     repository.setMentionRole(GUILD, null);
     expect(repository.get(GUILD).mentionRoleId).toBeNull();
+  });
+
+  it('clears the steam watch channel', () => {
+    const repository = createGuildSettingsRepository(db);
+    repository.setSteamWatchChannel(GUILD, 'channel-steam');
+    repository.setSteamWatchChannel(GUILD, null);
+    expect(repository.get(GUILD).steamWatchChannelId).toBeNull();
   });
 });
 

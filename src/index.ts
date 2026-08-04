@@ -6,7 +6,10 @@ import { buildButtonRegistry, buildCommandRegistry } from './app/registries.ts';
 import { loadEnv } from './config/env.ts';
 import { openDatabase } from './db/database.ts';
 import { createClient } from './discord/client.ts';
+import { createSteamLinkListener } from './discord/steamLinkListener.ts';
 import { createLogger } from './logger.ts';
+import { createSteamClient } from './steam/client.ts';
+import { startSteamWatchPoller } from './steam/poller.ts';
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
 
@@ -20,6 +23,8 @@ const context = createAppContext(db, logger, env.POWER_USER_IDS);
 const commands = buildCommandRegistry();
 const buttons = buildButtonRegistry();
 const client = createClient();
+const steamClient = createSteamClient();
+const steamPoller = startSteamWatchPoller(context, client, steamClient);
 
 const beat = (): void => {
   try {
@@ -32,6 +37,7 @@ const beat = (): void => {
 client.once(Events.ClientReady, (ready) => {
   logger.info({ user: ready.user.tag, guilds: ready.guilds.cache.size }, 'logged in');
   beat();
+  void steamPoller.runNow();
 });
 
 const heartbeat = setInterval(beat, HEARTBEAT_INTERVAL_MS);
@@ -51,6 +57,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
+client.on(Events.MessageCreate, createSteamLinkListener(context, steamClient));
+
 client.on(Events.Error, (error) => {
   logger.error({ err: error }, 'discord client error');
 });
@@ -58,6 +66,7 @@ client.on(Events.Error, (error) => {
 const shutdown = (signal: string): void => {
   logger.info({ signal }, 'shutting down');
   clearInterval(heartbeat);
+  steamPoller.stop();
   void client.destroy().finally(() => {
     db.close();
     process.exit(0);

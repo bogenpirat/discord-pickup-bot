@@ -43,6 +43,20 @@ export interface Strings {
   readonly timeNotUnderstood: string;
   readonly noTimeFound: string;
   readonly unexpectedError: string;
+  readonly steamWatchChannelSaved: (channelId: string) => string;
+  readonly steamWatchListEmpty: string;
+  readonly steamWatchListEntry: (parts: SteamWatchListEntryParts) => string;
+  readonly steamWatchPendingText: string;
+  readonly steamWatchRemoved: (name: string) => string;
+  readonly steamWatchNotFound: string;
+  readonly steamReleasedContent: (name: string) => string;
+  readonly steamPriceLabel: string;
+}
+
+export interface SteamWatchListEntryParts {
+  readonly id: number;
+  readonly name: string;
+  readonly status: string;
 }
 
 export interface ConfigSummaryParts {
@@ -95,6 +109,14 @@ const de: Strings = {
   noTimeFound:
     'Ich habe keine Uhrzeit gefunden und zeige deinen Text als Notiz. Erkannt werden z. B. `20:30`, `20 Uhr`, `halb 9`, `viertel vor 9`, `in 90 Minuten`, `morgen 20:30`.',
   unexpectedError: 'Da ist etwas schiefgelaufen. Bitte versuch es noch einmal.',
+  steamWatchChannelSaved: (channelId) => `Steam-Release-Kanal ist jetzt <#${channelId}>.`,
+  steamWatchListEmpty: 'Gerade wird kein Spiel beobachtet.',
+  steamWatchListEntry: (parts) => `**${parts.name}** (#${parts.id}) — ${parts.status}`,
+  steamWatchPendingText: 'noch kein Datum bekannt',
+  steamWatchRemoved: (name) => `**${name}** wird nicht mehr beobachtet.`,
+  steamWatchNotFound: 'Dazu habe ich keinen beobachteten Eintrag gefunden.',
+  steamReleasedContent: (name) => `🎮 **${name}** ist jetzt verfügbar!`,
+  steamPriceLabel: 'Preis',
 };
 
 const en: Strings = {
@@ -136,6 +158,14 @@ const en: Strings = {
   noTimeFound:
     'I did not find a time in there and will show your text as a note. Recognised formats include `20:30`, `8pm`, `half past 8`, `in 90 minutes`, `tomorrow 8pm`.',
   unexpectedError: 'Something went wrong. Please try again.',
+  steamWatchChannelSaved: (channelId) => `Steam release channel is now <#${channelId}>.`,
+  steamWatchListEmpty: 'No games are currently being watched.',
+  steamWatchListEntry: (parts) => `**${parts.name}** (#${parts.id}) — ${parts.status}`,
+  steamWatchPendingText: 'no date yet',
+  steamWatchRemoved: (name) => `**${name}** is no longer being watched.`,
+  steamWatchNotFound: 'Could not find a watched entry for that.',
+  steamReleasedContent: (name) => `🎮 **${name}** is now available!`,
+  steamPriceLabel: 'Price',
 };
 
 export const STRINGS: Readonly<Record<AppLocale, Strings>> = { de, en };

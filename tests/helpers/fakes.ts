@@ -120,6 +120,7 @@ export interface FakeCommandOptions extends FakeInteractionOptions {
   readonly commandName?: string;
   readonly subcommand?: string;
   readonly strings?: Readonly<Record<string, string | null>>;
+  readonly integers?: Readonly<Record<string, number | null>>;
   readonly channels?: Readonly<Record<string, { id: string } | null>>;
   readonly roles?: Readonly<Record<string, { id: string } | null>>;
   readonly focused?: string;
@@ -183,6 +184,13 @@ export const createFakeCommandInteraction = (
       },
       getChannel: (name: string, required?: boolean) => {
         const value = options.channels?.[name] ?? null;
+        if (value === null && required === true) {
+          throw new Error(`missing required option ${name}`);
+        }
+        return value;
+      },
+      getInteger: (name: string, required?: boolean) => {
+        const value = options.integers?.[name] ?? null;
         if (value === null && required === true) {
           throw new Error(`missing required option ${name}`);
         }

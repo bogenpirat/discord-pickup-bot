@@ -18,6 +18,7 @@ export default defineConfig({
         'src/commands/**': { lines: 80, branches: 80, functions: 80, statements: 80 },
         'src/buttons/**': { lines: 80, branches: 80, functions: 80, statements: 80 },
         'src/config/**': { lines: 90, branches: 90, functions: 90, statements: 90 },
+        'src/steam/**': { lines: 90, branches: 90, functions: 90, statements: 90 },
       },
     },
   },

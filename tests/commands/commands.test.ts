@@ -276,6 +276,210 @@ describe('/pickup-config settings', () => {
   });
 });
 
+describe('/pickup-config steam-channel', () => {
+  it('saves the steam watch channel', async () => {
+    const context = createTestContext();
+    const fake = createFakeCommandInteraction({
+      subcommand: 'steam-channel',
+      manageGuild: true,
+      channels: { channel: { id: 'channel-steam' } },
+    });
+
+    await pickupConfigCommand.execute(fake.interaction, context);
+
+    expect(context.settings.get('guild-1').steamWatchChannelId).toBe('channel-steam');
+    expect(fake.messages().join(' ')).toContain('<#channel-steam>');
+  });
+});
+
+describe('/pickup-config steam-list', () => {
+  it('shows a message when nothing is being watched', async () => {
+    const context = createTestContext();
+    const fake = createFakeCommandInteraction({ subcommand: 'steam-list', manageGuild: true });
+
+    await pickupConfigCommand.execute(fake.interaction, context);
+
+    expect(fake.messages().join(' ')).toContain('Gerade wird kein Spiel beobachtet');
+  });
+
+  it('lists a scheduled game with its release date', async () => {
+    const context = createTestContext();
+    const id = context.steamWatches.create({
+      guildId: 'guild-1',
+      channelId: 'channel-1',
+      messageId: 'message-1',
+      appId: 1245620,
+      gameName: 'ELDEN RING',
+      status: 'scheduled',
+      releaseDate: Temporal.Instant.from('2026-08-14T00:00:00Z').epochMilliseconds,
+      releaseDateText: '14 Aug, 2026',
+      nextCheckAt: Temporal.Instant.from('2026-08-14T00:00:00Z').epochMilliseconds,
+    });
+    const fake = createFakeCommandInteraction({ subcommand: 'steam-list', manageGuild: true });
+
+    await pickupConfigCommand.execute(fake.interaction, context);
+
+    const message = fake.messages().join(' ');
+    expect(message).toContain('ELDEN RING');
+    expect(message).toContain(`#${id}`);
+  });
+
+  it('lists a pending game showing the raw steam text', async () => {
+    const context = createTestContext();
+    context.steamWatches.create({
+      guildId: 'guild-1',
+      channelId: 'channel-1',
+      messageId: 'message-1',
+      appId: 1245620,
+      gameName: 'Some Upcoming Game',
+      status: 'pending',
+      releaseDate: null,
+      releaseDateText: 'Q2 2026',
+      nextCheckAt: 1000,
+    });
+    const fake = createFakeCommandInteraction({ subcommand: 'steam-list', manageGuild: true });
+
+    await pickupConfigCommand.execute(fake.interaction, context);
+
+    expect(fake.messages().join(' ')).toContain('Q2 2026');
+  });
+
+  it('falls back to a pending placeholder when there is no date text yet', async () => {
+    const context = createTestContext();
+    context.steamWatches.create({
+      guildId: 'guild-1',
+      channelId: 'channel-1',
+      messageId: 'message-1',
+      appId: 1245620,
+      gameName: 'Steam App 1245620',
+      status: 'pending',
+      releaseDate: null,
+      releaseDateText: null,
+      nextCheckAt: 1000,
+    });
+    const fake = createFakeCommandInteraction({ subcommand: 'steam-list', manageGuild: true });
+
+    await pickupConfigCommand.execute(fake.interaction, context);
+
+    expect(fake.messages().join(' ')).toContain('noch kein Datum bekannt');
+  });
+});
+
+describe('/pickup-config steam-remove', () => {
+  it('removes a watched game and reports its name', async () => {
+    const context = createTestContext();
+    const id = context.steamWatches.create({
+      guildId: 'guild-1',
+      channelId: 'channel-1',
+      messageId: 'message-1',
+      appId: 1245620,
+      gameName: 'ELDEN RING',
+      status: 'pending',
+      releaseDate: null,
+      releaseDateText: null,
+      nextCheckAt: 1000,
+    });
+    const fake = createFakeCommandInteraction({
+      subcommand: 'steam-remove',
+      manageGuild: true,
+      integers: { id: id as number },
+    });
+
+    await pickupConfigCommand.execute(fake.interaction, context);
+
+    expect(context.steamWatches.findById(id as number)).toBeUndefined();
+    expect(fake.messages().join(' ')).toContain('ELDEN RING');
+  });
+
+  it('reports not found for an unknown id', async () => {
+    const context = createTestContext();
+    const fake = createFakeCommandInteraction({
+      subcommand: 'steam-remove',
+      manageGuild: true,
+      integers: { id: 999 },
+    });
+
+    await pickupConfigCommand.execute(fake.interaction, context);
+
+    expect(fake.messages().join(' ')).toContain('keinen beobachteten Eintrag');
+  });
+
+  it('does not remove a watch belonging to another guild', async () => {
+    const context = createTestContext();
+    const id = context.steamWatches.create({
+      guildId: 'guild-other',
+      channelId: 'channel-1',
+      messageId: 'message-1',
+      appId: 1245620,
+      gameName: 'ELDEN RING',
+      status: 'pending',
+      releaseDate: null,
+      releaseDateText: null,
+      nextCheckAt: 1000,
+    });
+    const fake = createFakeCommandInteraction({
+      subcommand: 'steam-remove',
+      manageGuild: true,
+      integers: { id: id as number },
+    });
+
+    await pickupConfigCommand.execute(fake.interaction, context);
+
+    expect(context.steamWatches.findById(id as number)).toBeDefined();
+    expect(fake.messages().join(' ')).toContain('keinen beobachteten Eintrag');
+  });
+
+  it('autocompletes watched games, filtered by the typed query', async () => {
+    const context = createTestContext();
+    context.steamWatches.create({
+      guildId: 'guild-1',
+      channelId: 'channel-1',
+      messageId: 'message-1',
+      appId: 1245620,
+      gameName: 'ELDEN RING',
+      status: 'pending',
+      releaseDate: null,
+      releaseDateText: null,
+      nextCheckAt: 1000,
+    });
+    context.steamWatches.create({
+      guildId: 'guild-1',
+      channelId: 'channel-1',
+      messageId: 'message-2',
+      appId: 1091500,
+      gameName: 'Cyberpunk 2077',
+      status: 'pending',
+      releaseDate: null,
+      releaseDateText: null,
+      nextCheckAt: 1000,
+    });
+    const fake = createFakeCommandInteraction({
+      subcommand: 'steam-remove',
+      manageGuild: true,
+      focused: 'elden',
+    });
+
+    await pickupConfigCommand.autocomplete?.(fake.interaction as never, context);
+
+    const names = fake.autocompleteChoices().map((choice) => choice.name);
+    expect(names.some((name) => name.includes('ELDEN RING'))).toBe(true);
+    expect(names.some((name) => name.includes('Cyberpunk 2077'))).toBe(false);
+  });
+
+  it('autocompletes with no results outside a guild', async () => {
+    const context = createTestContext();
+    const fake = createFakeCommandInteraction({
+      subcommand: 'steam-remove',
+      guildId: null,
+      focused: '',
+    });
+
+    await pickupConfigCommand.autocomplete?.(fake.interaction as never, context);
+
+    expect(fake.autocompleteChoices()).toEqual([]);
+  });
+});
+
 describe('/valo', () => {
   const configured = () => {
     const context = createTestContext();

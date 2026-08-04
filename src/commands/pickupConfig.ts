@@ -5,6 +5,8 @@ import {
   InteractionContextType,
   roleMention,
   SlashCommandBuilder,
+  TimestampStyles,
+  time,
 } from 'discord.js';
 import type { AppContext } from '../app/context.ts';
 import { canManageConfig, canUseConfig } from '../discord/permissions.ts';
@@ -127,6 +129,49 @@ const definition = new SlashCommandBuilder()
       .setNameLocalizations({ de: 'anzeigen' })
       .setDescription('Show the current configuration')
       .setDescriptionLocalizations({ de: 'Aktuelle Konfiguration anzeigen' }),
+  )
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName('steam-channel')
+      .setNameLocalizations({ de: 'steam-kanal' })
+      .setDescription('Set the channel watched for Steam store links')
+      .setDescriptionLocalizations({
+        de: 'Kanal festlegen, der auf Steam-Store-Links beobachtet wird',
+      })
+      .addChannelOption((option) =>
+        option
+          .setName('channel')
+          .setNameLocalizations({ de: 'kanal' })
+          .setDescription('Channel to watch')
+          .setDescriptionLocalizations({ de: 'Zu beobachtender Kanal' })
+          .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+          .setRequired(true),
+      ),
+  )
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName('steam-list')
+      .setNameLocalizations({ de: 'steam-liste' })
+      .setDescription('List games currently being watched for their release')
+      .setDescriptionLocalizations({
+        de: 'Aktuell auf ihren Release beobachtete Spiele auflisten',
+      }),
+  )
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName('steam-remove')
+      .setNameLocalizations({ de: 'steam-entfernen' })
+      .setDescription('Stop watching a game')
+      .setDescriptionLocalizations({ de: 'Ein Spiel nicht mehr beobachten' })
+      .addIntegerOption((option) =>
+        option
+          .setName('id')
+          .setNameLocalizations({ de: 'id' })
+          .setDescription('The watched game to remove')
+          .setDescriptionLocalizations({ de: 'Das zu entfernende beobachtete Spiel' })
+          .setAutocomplete(true)
+          .setRequired(true),
+      ),
   );
 
 const execute = async (
@@ -210,6 +255,46 @@ const execute = async (
     return;
   }
 
+  if (subcommand === 'steam-channel') {
+    const channel = interaction.options.getChannel('channel', true);
+    context.settings.setSteamWatchChannel(guildId, channel.id);
+    await replyEphemeral(interaction, strings.steamWatchChannelSaved(channel.id));
+    return;
+  }
+
+  if (subcommand === 'steam-list') {
+    const watches = context.steamWatches.listByGuild(guildId);
+    if (watches.length === 0) {
+      await replyEphemeral(interaction, strings.steamWatchListEmpty);
+      return;
+    }
+    const lines = watches.map((watch) =>
+      strings.steamWatchListEntry({
+        id: watch.id,
+        name: watch.gameName,
+        status:
+          watch.status === 'scheduled' && watch.releaseDate !== null
+            ? `${time(new Date(watch.releaseDate), TimestampStyles.ShortDate)} (${time(new Date(watch.releaseDate), TimestampStyles.RelativeTime)})`
+            : (watch.releaseDateText ?? strings.steamWatchPendingText),
+      }),
+    );
+    await replyEphemeral(interaction, lines.join('\n'));
+    return;
+  }
+
+  if (subcommand === 'steam-remove') {
+    const id = interaction.options.getInteger('id', true);
+    const watch = context.steamWatches.findById(id);
+    const removed = context.steamWatches.removeForGuild(guildId, id);
+    await replyEphemeral(
+      interaction,
+      removed && watch !== undefined
+        ? strings.steamWatchRemoved(watch.gameName)
+        : strings.steamWatchNotFound,
+    );
+    return;
+  }
+
   if (subcommand === 'timezone') {
     const timezone = interaction.options.getString('timezone', true).trim();
     if (!isValidTimeZone(timezone)) {
@@ -243,7 +328,23 @@ export const pickupConfigCommand: SlashCommand = {
   name: 'pickup-config',
   definition: definition.toJSON(),
   execute,
-  autocomplete: async (interaction) => {
+  autocomplete: async (interaction, context) => {
+    if (interaction.options.getSubcommand() === 'steam-remove') {
+      const guildId = interaction.guildId;
+      if (guildId === null) {
+        await interaction.respond([]);
+        return;
+      }
+      const query = interaction.options.getFocused().toLowerCase();
+      const choices = context.steamWatches
+        .listByGuild(guildId)
+        .filter((watch) => watch.gameName.toLowerCase().includes(query))
+        .slice(0, 25)
+        .map((watch) => ({ name: `${watch.gameName} (#${watch.id})`, value: watch.id }));
+      await interaction.respond(choices);
+      return;
+    }
+
     const query = interaction.options.getFocused();
     const zones = searchTimeZones(query, 25);
     await interaction.respond(zones.map((zone) => ({ name: zone, value: zone })));

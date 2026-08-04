@@ -28,6 +28,19 @@ describe('createAppContext', () => {
     context.responses.set(id, 'u1', 'in', 0);
     expect(context.responses.listByPickup(id)).toHaveLength(1);
 
+    context.steamWatches.create({
+      guildId: 'guild-1',
+      channelId: 'channel-1',
+      messageId: 'message-1',
+      appId: 1245620,
+      gameName: 'ELDEN RING',
+      status: 'pending',
+      releaseDate: null,
+      releaseDateText: null,
+      nextCheckAt: 0,
+    });
+    expect(context.steamWatches.listByGuild('guild-1')).toHaveLength(1);
+
     db.close();
   });
 
@@ -85,6 +98,9 @@ describe('registries', () => {
     expect(names['channel']).toBe('kanal');
     expect(names['admin-role']).toBe('admin-rolle');
     expect(names['timezone']).toBe('zeitzone');
+    expect(names['steam-channel']).toBe('steam-kanal');
+    expect(names['steam-list']).toBe('steam-liste');
+    expect(names['steam-remove']).toBe('steam-entfernen');
   });
 
   it('does not gate the config command behind default member permissions', () => {
@@ -108,12 +124,14 @@ describe('createLogger', () => {
 });
 
 describe('createClient', () => {
-  it('requests only the guilds intent', async () => {
+  it('requests guilds, guild messages, and message content, but nothing else privileged', async () => {
     const client = createClient();
 
     expect(client.options.intents.has(GatewayIntentBits.Guilds)).toBe(true);
-    expect(client.options.intents.has(GatewayIntentBits.MessageContent)).toBe(false);
+    expect(client.options.intents.has(GatewayIntentBits.GuildMessages)).toBe(true);
+    expect(client.options.intents.has(GatewayIntentBits.MessageContent)).toBe(true);
     expect(client.options.intents.has(GatewayIntentBits.GuildMembers)).toBe(false);
+    expect(client.options.intents.has(GatewayIntentBits.GuildPresences)).toBe(false);
 
     await client.destroy();
   });

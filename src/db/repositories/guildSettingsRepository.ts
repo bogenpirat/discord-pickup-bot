@@ -14,6 +14,7 @@ export interface GuildSettings {
   readonly configRoleId: string | null;
   readonly emojis: ChoiceEmojis;
   readonly timezone: string;
+  readonly steamWatchChannelId: string | null;
 }
 
 const EMOJI_COLUMNS: Readonly<Record<PickupChoice, string>> = {
@@ -29,6 +30,7 @@ export interface GuildSettingsRepository {
   setConfigRole(guildId: string, roleId: string | null): void;
   setChoiceEmoji(guildId: string, choice: PickupChoice, emoji: string | null): void;
   setTimezone(guildId: string, timezone: string): void;
+  setSteamWatchChannel(guildId: string, channelId: string | null): void;
 }
 
 const defaults = (guildId: string): GuildSettings => ({
@@ -38,6 +40,7 @@ const defaults = (guildId: string): GuildSettings => ({
   configRoleId: null,
   emojis: NO_CHOICE_EMOJIS,
   timezone: DEFAULT_TIME_ZONE,
+  steamWatchChannelId: null,
 });
 
 const toSettings = (row: SqlRow): GuildSettings => ({
@@ -51,6 +54,7 @@ const toSettings = (row: SqlRow): GuildSettings => ({
     out: asNullableText(row[EMOJI_COLUMNS.out]),
   },
   timezone: asText(row['timezone']),
+  steamWatchChannelId: asNullableText(row['steam_watch_channel_id']),
 });
 
 export const createGuildSettingsRepository = (db: DatabaseSync): GuildSettingsRepository => {
@@ -71,6 +75,7 @@ export const createGuildSettingsRepository = (db: DatabaseSync): GuildSettingsRe
   const setMentionRole = upsert('mention_role_id');
   const setConfigRole = upsert('config_role_id');
   const setTimezoneValue = upsert('timezone');
+  const setSteamWatchChannelValue = upsert('steam_watch_channel_id');
   const setEmoji: Readonly<Record<PickupChoice, (guildId: string, emoji: string | null) => void>> =
     {
       in: upsert(EMOJI_COLUMNS.in),
@@ -91,6 +96,9 @@ export const createGuildSettingsRepository = (db: DatabaseSync): GuildSettingsRe
     },
     setTimezone: (guildId, timezone) => {
       setTimezoneValue(guildId, timezone);
+    },
+    setSteamWatchChannel: (guildId, channelId) => {
+      setSteamWatchChannelValue(guildId, channelId);
     },
   };
 };

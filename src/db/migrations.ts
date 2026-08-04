@@ -42,6 +42,27 @@ export const MIGRATIONS: readonly string[] = [
   ALTER TABLE guild_settings ADD COLUMN emoji_later TEXT;
   ALTER TABLE guild_settings ADD COLUMN emoji_out TEXT;
   `,
+  `
+  ALTER TABLE guild_settings ADD COLUMN steam_watch_channel_id TEXT;
+
+  CREATE TABLE steam_watches (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id          TEXT NOT NULL,
+    channel_id        TEXT NOT NULL,
+    message_id        TEXT NOT NULL,
+    app_id            INTEGER NOT NULL,
+    game_name         TEXT NOT NULL,
+    status            TEXT NOT NULL DEFAULT 'pending',
+    release_date      INTEGER,
+    release_date_text TEXT,
+    next_check_at     INTEGER NOT NULL,
+    created_at        INTEGER NOT NULL,
+    updated_at        INTEGER NOT NULL
+  );
+
+  CREATE UNIQUE INDEX idx_steam_watches_guild_app ON steam_watches (guild_id, app_id);
+  CREATE INDEX idx_steam_watches_next_check ON steam_watches (next_check_at);
+  `,
 ];
 
 const readUserVersion = (db: DatabaseSync): number =>

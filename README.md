@@ -4,6 +4,10 @@ Coordinates pickup games for a video game. A member calls a pickup with `/valo`,
 posts one message to a configured channel, pings a configured role, and keeps a live tally
 of who is **Dabei**, **Später** (joining later), or **Raus**.
 
+It also watches a configured channel for Steam store links to unreleased games. When one
+is posted, the bot tracks the game's release date and, once it actually launches, replies
+to that message announcing it, with the German-region price if Steam lists one.
+
 German is the default language; English speakers get English command names and replies via
 Discord's own locale.
 
@@ -18,9 +22,12 @@ Discord's own locale.
 | `/pickup-config zeitzone <tz>` | config access | IANA zone used to read start times |
 | `/pickup-config anzeigen` | config access | Shows the current configuration |
 | `/pickup-config admin-rolle [@role]` | **admins only** | Role allowed to use the commands above |
+| `/pickup-config steam-kanal <#channel>` | config access | Channel watched for Steam store links |
+| `/pickup-config steam-liste` | config access | Lists games currently being watched for release |
+| `/pickup-config steam-entfernen <id>` | config access | Stops watching a game |
 
 English clients see `/valo info:` and
-`/pickup-config channel|role|timezone|emoji|show|admin-role`.
+`/pickup-config channel|role|timezone|emoji|show|admin-role|steam-channel|steam-list|steam-remove`.
 
 ### Icons
 
@@ -136,10 +143,13 @@ Still on the **Bot** tab:
 | **Requires OAuth2 Code Grant** | **Off** | Leave off, or invites will fail. |
 | **Presence Intent** | **Off** | Not used. |
 | **Server Members Intent** | **Off** | Not used. |
-| **Message Content Intent** | **Off** | Not used — the bot never reads message text. |
+| **Message Content Intent** | **On** | Needed to detect Steam store links posted in the watched channel. |
 
-All three privileged intents stay **off**. This bot connects with only the non-privileged
-`Guilds` intent, so it needs no approval or review, at any server count.
+Presence and Server Members stay **off**. Message Content Intent is **on**, since the bot
+needs to read message text to detect Steam links in the configured channel — it only
+inspects messages posted in that one channel, nothing else. This is a privileged intent:
+bots in fewer than 100 servers can turn it on freely (as above), but growing past 100
+servers requires Discord to review and approve it first.
 
 ### 5. Set the installation context
 
@@ -241,6 +251,7 @@ Run these once per server, as someone with **Manage Server** or a `POWER_USER_ID
 /pickup-config zeitzone    Europe/Berlin
 /pickup-config admin-rolle @Orga          # optional; lets that role configure too
 /pickup-config emoji       option:Dabei emoji:🔥   # optional; defaults are ✅ 🕗 ❌
+/pickup-config steam-kanal #upcoming-games         # optional; enables the Steam release watcher
 /pickup-config anzeigen
 ```
 

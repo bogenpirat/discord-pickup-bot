@@ -11,6 +11,10 @@ import {
   createResponseRepository,
   type ResponseRepository,
 } from '../db/repositories/responseRepository.ts';
+import {
+  createSteamWatchRepository,
+  type SteamWatchRepository,
+} from '../db/repositories/steamWatchRepository.ts';
 import { createKeyedMutex, type KeyedMutex } from '../lib/mutex.ts';
 import type { Logger } from '../logger.ts';
 
@@ -19,6 +23,7 @@ export interface AppContext {
   readonly settings: GuildSettingsRepository;
   readonly pickups: PickupRepository;
   readonly responses: ResponseRepository;
+  readonly steamWatches: SteamWatchRepository;
   readonly mutex: KeyedMutex;
   readonly logger: Logger;
   readonly powerUserIds: readonly string[];
@@ -34,6 +39,7 @@ export const createAppContext = (
   settings: createGuildSettingsRepository(db),
   pickups: createPickupRepository(db),
   responses: createResponseRepository(db),
+  steamWatches: createSteamWatchRepository(db),
   mutex: createKeyedMutex(),
   logger,
   powerUserIds,

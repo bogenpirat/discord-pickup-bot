@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { pickupConfigCommand } from '../../src/commands/pickupConfig.ts';
 import { valoCommand } from '../../src/commands/valo.ts';
+import { valoTimeCommand } from '../../src/commands/valoTime.ts';
 import { createFakeCommandInteraction, createTestContext } from '../helpers/fakes.ts';
 
 const ADMIN_ROLE = 'role-admin';
@@ -533,7 +534,7 @@ describe('/valo', () => {
     expect(fake.messages().join(' ')).toContain('Pickup gepostet');
   });
 
-  it('pulls a time out of free text and keeps the rest as the note', async () => {
+  it('pulls a time out of free text and keeps the whole text as the note', async () => {
     const context = configured();
     const fake = createFakeCommandInteraction({
       strings: { info: 'wer hat bock auf ranked um halb 9' },
@@ -543,7 +544,19 @@ describe('/valo', () => {
 
     const stored = context.pickups.findByMessageId('message-1');
     expect(stored?.startsAt).toBe(at('2026-07-27T18:30:00Z'));
-    expect(stored?.note).toBe('wer hat bock auf ranked');
+    expect(stored?.note).toBe('wer hat bock auf ranked um halb 9');
+  });
+
+  it('keeps a long free text intact, including the parts around the time', async () => {
+    const info = 'hallo hallo, grosse Spazierrunde (BIG WALK) Sonntag 19 Uhr (oder was anderes idk';
+    const context = configured();
+    const fake = createFakeCommandInteraction({ strings: { info } });
+
+    await valoCommand.execute(fake.interaction, context);
+
+    const stored = context.pickups.findByMessageId('message-1');
+    expect(stored?.note).toBe(info);
+    expect(stored?.startsAt).toBe(at('2026-08-02T17:00:00Z'));
   });
 
   it.each([
@@ -609,5 +622,197 @@ describe('/valo', () => {
     const stored = context.pickups.findByMessageId('message-1');
     expect(stored?.startsAt).toBeNull();
     expect(stored?.note).toBeNull();
+  });
+});
+
+describe('/valo-time', () => {
+  const at = (iso: string) => Temporal.Instant.from(iso).epochMilliseconds;
+
+  /** Posts a pickup so there is something to correct afterwards. */
+  const posted = async (info = 'spazierrunde sonntagabend') => {
+    const context = createTestContext();
+    context.settings.setPickupChannel('guild-1', 'channel-1');
+    const fake = createFakeCommandInteraction({ strings: { info } });
+    await valoCommand.execute(fake.interaction, context);
+    return context;
+  };
+
+  const stored = (context: Awaited<ReturnType<typeof posted>>) =>
+    context.pickups.findByMessageId('message-1');
+
+  it('is registered as /valo-time', () => {
+    expect(valoTimeCommand.name).toBe('valo-time');
+  });
+
+  it('refuses outside a guild', async () => {
+    const context = await posted();
+    const fake = createFakeCommandInteraction({ guildId: null, strings: { time: '20:30' } });
+
+    await valoTimeCommand.execute(fake.interaction, context);
+
+    expect(fake.messages().join(' ')).toContain('nur auf einem Server');
+  });
+
+  it('sets the time on the last posted pickup', async () => {
+    const context = await posted();
+    const fake = createFakeCommandInteraction({ strings: { time: '20:30' } });
+
+    await valoTimeCommand.execute(fake.interaction, context);
+
+    expect(stored(context)?.startsAt).toBe(at('2026-07-27T18:30:00Z'));
+    expect(fake.messages().join(' ')).toContain('Zeit geändert');
+  });
+
+  it('accepts a weekday with a time', async () => {
+    const context = await posted();
+    const fake = createFakeCommandInteraction({ strings: { time: 'Sonntag 20 Uhr' } });
+
+    await valoTimeCommand.execute(fake.interaction, context);
+
+    expect(stored(context)?.startsAt).toBe(at('2026-08-02T18:00:00Z'));
+  });
+
+  it('rewrites the posted embed', async () => {
+    const context = await posted();
+    const fake = createFakeCommandInteraction({ strings: { time: '20:30' } });
+
+    await valoTimeCommand.execute(fake.interaction, context);
+
+    expect(fake.edited).toHaveLength(1);
+    const payload = fake.edited[0] as { embeds: { data: { description: string } }[] };
+    expect(payload.embeds[0]?.data.description).toContain('<t:');
+  });
+
+  it('keeps the note untouched while changing the time', async () => {
+    const context = await posted('grosse Spazierrunde (BIG WALK) Sonntagabend');
+    const fake = createFakeCommandInteraction({ strings: { time: 'sonntag 19 uhr' } });
+
+    await valoTimeCommand.execute(fake.interaction, context);
+
+    expect(stored(context)?.note).toBe('grosse Spazierrunde (BIG WALK) Sonntagabend');
+  });
+
+  it('replaces a time that was set before', async () => {
+    const context = await posted('ranked 20:30');
+    const fake = createFakeCommandInteraction({ strings: { time: '21:00' } });
+
+    await valoTimeCommand.execute(fake.interaction, context);
+
+    expect(stored(context)?.startsAt).toBe(at('2026-07-27T19:00:00Z'));
+  });
+
+  it('shows an unreadable time as written and says so', async () => {
+    const context = await posted();
+    const fake = createFakeCommandInteraction({ strings: { time: 'irgendwann halt' } });
+
+    await valoTimeCommand.execute(fake.interaction, context);
+
+    const pickup = stored(context);
+    expect(pickup?.startsAt).toBeNull();
+    expect(pickup?.startsAtText).toBe('irgendwann halt');
+    expect(fake.messages().join(' ')).toContain('nicht verstanden');
+  });
+
+  it('reports when nothing has been posted yet', async () => {
+    const context = createTestContext();
+    const fake = createFakeCommandInteraction({ strings: { time: '20:30' } });
+
+    await valoTimeCommand.execute(fake.interaction, context);
+
+    expect(fake.messages().join(' ')).toContain('noch kein Pickup');
+  });
+
+  it('refuses a member who did not call the pickup', async () => {
+    const context = await posted();
+    const fake = createFakeCommandInteraction({
+      userId: 'user-2',
+      manageGuild: false,
+      strings: { time: '20:30' },
+    });
+
+    await valoTimeCommand.execute(fake.interaction, context);
+
+    expect(stored(context)?.startsAt).toBeNull();
+    expect(fake.messages().join(' ')).toContain('Nur der Ersteller');
+  });
+
+  it("lets an admin correct someone else's pickup", async () => {
+    const context = await posted();
+    const fake = createFakeCommandInteraction({
+      userId: 'user-2',
+      manageGuild: true,
+      strings: { time: '20:30' },
+    });
+
+    await valoTimeCommand.execute(fake.interaction, context);
+
+    expect(stored(context)?.startsAt).toBe(at('2026-07-27T18:30:00Z'));
+  });
+
+  it('refuses a closed pickup', async () => {
+    const context = await posted();
+    const pickup = stored(context);
+    context.pickups.close(pickup?.id ?? 0, Date.now());
+    const fake = createFakeCommandInteraction({ strings: { time: '20:30' } });
+
+    await valoTimeCommand.execute(fake.interaction, context);
+
+    expect(stored(context)?.startsAt).toBeNull();
+    expect(fake.messages().join(' ')).toContain('bereits geschlossen');
+  });
+
+  it('leaves the pickup alone when its message is gone', async () => {
+    const context = await posted();
+    const fake = createFakeCommandInteraction({
+      messageMissing: true,
+      strings: { time: '20:30' },
+    });
+
+    await valoTimeCommand.execute(fake.interaction, context);
+
+    expect(stored(context)?.startsAt).toBeNull();
+    expect(fake.messages().join(' ')).toContain('nicht schreiben');
+  });
+
+  it('reports a failed edit', async () => {
+    const context = await posted();
+    const fake = createFakeCommandInteraction({ editFails: true, strings: { time: '20:30' } });
+
+    await valoTimeCommand.execute(fake.interaction, context);
+
+    expect(fake.messages().join(' ')).toContain('nicht schreiben');
+  });
+
+  it('picks the newest pickup when several were posted', async () => {
+    const context = await posted('erste runde');
+    const older = context.pickups.create({
+      guildId: 'guild-1',
+      channelId: 'channel-1',
+      creatorId: 'user-1',
+      startsAt: null,
+      startsAtText: null,
+      note: 'alte runde',
+    });
+    context.pickups.attachMessage(older, 'message-0');
+    context.database.prepare('UPDATE pickups SET created_at = 1 WHERE id = ?').run(older);
+
+    const fake = createFakeCommandInteraction({ strings: { time: '20:30' } });
+    await valoTimeCommand.execute(fake.interaction, context);
+
+    expect(stored(context)?.startsAt).toBe(at('2026-07-27T18:30:00Z'));
+    expect(context.pickups.findById(older)?.startsAt).toBeNull();
+  });
+
+  it('ignores a pickup from another guild', async () => {
+    const context = await posted();
+    const fake = createFakeCommandInteraction({
+      guildId: 'guild-2',
+      strings: { time: '20:30' },
+    });
+
+    await valoTimeCommand.execute(fake.interaction, context);
+
+    expect(stored(context)?.startsAt).toBeNull();
+    expect(fake.messages().join(' ')).toContain('noch kein Pickup');
   });
 });

@@ -126,12 +126,15 @@ export interface FakeCommandOptions extends FakeInteractionOptions {
   readonly focused?: string;
   readonly sendable?: boolean;
   readonly sendFails?: boolean;
+  readonly messageMissing?: boolean;
+  readonly editFails?: boolean;
 }
 
 export interface FakeCommandInteraction {
   readonly interaction: ChatInputCommandInteraction;
   readonly calls: RecordedCall[];
   readonly sent: unknown[];
+  readonly edited: unknown[];
   readonly messages: () => string[];
   readonly autocompleteChoices: () => { name: string; value: string }[];
 }
@@ -141,20 +144,41 @@ export const createFakeCommandInteraction = (
 ): FakeCommandInteraction => {
   const calls: RecordedCall[] = [];
   const sent: unknown[] = [];
+  const edited: unknown[] = [];
   const responded: { name: string; value: string }[][] = [];
   const state = { deferred: false, replied: false };
   const guildId = options.guildId === undefined ? 'guild-1' : options.guildId;
+
+  const postedMessage = {
+    id: 'message-1',
+    url: 'https://discord.com/channels/guild-1/channel-1/message-1',
+    edit: async (payload: unknown) => {
+      if (options.editFails === true) {
+        throw new Error('cannot edit');
+      }
+      edited.push(payload);
+      return undefined;
+    },
+  };
 
   const channel = {
     id: 'channel-1',
     isTextBased: () => true,
     isSendable: () => options.sendable ?? true,
+    messages: {
+      fetch: async (messageId: string) => {
+        if (options.messageMissing === true || messageId !== postedMessage.id) {
+          throw new Error('unknown message');
+        }
+        return postedMessage;
+      },
+    },
     send: async (payload: unknown) => {
       if (options.sendFails === true) {
         throw new Error('cannot send');
       }
       sent.push(payload);
-      return { id: 'message-1', url: 'https://discord.com/channels/guild-1/channel-1/message-1' };
+      return postedMessage;
     },
   };
 
@@ -225,6 +249,7 @@ export const createFakeCommandInteraction = (
     interaction: interaction as unknown as ChatInputCommandInteraction,
     calls,
     sent,
+    edited,
     messages: () =>
       calls.map((call) => {
         const payload = call.payload;

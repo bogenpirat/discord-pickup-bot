@@ -1,5 +1,7 @@
 import { err, ok, type Result } from '../../lib/result.ts';
-import type { DayPrefix, TimeParseErrorCode, WallClock } from './types.ts';
+import type { DayAnchor, TimeParseErrorCode, WallClock } from './types.ts';
+
+const DAYS_PER_WEEK = 7;
 
 const applyEveningPreference = (wall: WallClock): WallClock => {
   if (!wall.eveningEligible || wall.hour >= 12) {
@@ -10,7 +12,7 @@ const applyEveningPreference = (wall: WallClock): WallClock => {
 
 export const resolveWallClock = (
   wall: WallClock,
-  prefix: DayPrefix,
+  anchor: DayAnchor,
   now: Temporal.ZonedDateTime,
 ): Result<Temporal.ZonedDateTime, TimeParseErrorCode> => {
   const resolved = applyEveningPreference(wall);
@@ -19,12 +21,23 @@ export const resolveWallClock = (
   const at = (days: number): Temporal.ZonedDateTime =>
     now.toPlainDate().add({ days }).toZonedDateTime({ timeZone: now.timeZoneId, plainTime });
 
-  const candidate = at(prefix.days);
-  if (Temporal.ZonedDateTime.compare(candidate, now) > 0) {
+  const isAhead = (candidate: Temporal.ZonedDateTime): boolean =>
+    Temporal.ZonedDateTime.compare(candidate, now) > 0;
+
+  if (anchor.kind === 'weekday') {
+    // Today counts as that weekday only while the time is still ahead; otherwise
+    // the named day means the one a week out.
+    const days = (anchor.weekday - now.dayOfWeek + DAYS_PER_WEEK) % DAYS_PER_WEEK;
+    const candidate = at(days);
+    return ok(isAhead(candidate) ? candidate : at(days + DAYS_PER_WEEK));
+  }
+
+  const candidate = at(anchor.kind === 'offset' ? anchor.days : 0);
+  if (isAhead(candidate)) {
     return ok(candidate);
   }
 
-  if (prefix.explicit) {
+  if (anchor.kind === 'offset') {
     return err('pastTime');
   }
 

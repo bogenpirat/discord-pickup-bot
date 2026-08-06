@@ -1,7 +1,8 @@
 import { err, ok, type Result } from '../../lib/result.ts';
 import { parseAbsolute } from './grammars/absolute.ts';
 import { parseColloquial } from './grammars/colloquial.ts';
-import { stripDayPrefix } from './grammars/dayPrefix.ts';
+import { stripDayAnchor } from './grammars/dayPrefix.ts';
+import { stripLeadingFiller } from './grammars/filler.ts';
 import { parseRelative } from './grammars/relative.ts';
 import { normalize } from './normalize.ts';
 import { resolveWallClock } from './resolve.ts';
@@ -21,14 +22,15 @@ export const parseStartTime = (
   }
 
   const zonedNow = now.toZonedDateTimeISO(timeZone);
-  const { rest, prefix } = stripDayPrefix(normalized);
+  const { rest, anchor } = stripDayAnchor(stripLeadingFiller(normalized));
+  const body = stripLeadingFiller(rest);
 
-  const relative = parseRelative(rest);
+  const relative = parseRelative(body);
   if (relative !== undefined) {
     if (!relative.ok) {
       return fail(relative.error, input);
     }
-    if (prefix.explicit) {
+    if (anchor.kind !== 'none') {
       return fail('unrecognized', input);
     }
     if (relative.value.kind === 'immediate') {
@@ -38,7 +40,7 @@ export const parseStartTime = (
   }
 
   const wall: Result<WallClock, TimeParseErrorCode> | undefined =
-    parseColloquial(rest) ?? parseAbsolute(rest);
+    parseColloquial(body) ?? parseAbsolute(body);
 
   if (wall === undefined) {
     return fail('unrecognized', input);
@@ -47,7 +49,7 @@ export const parseStartTime = (
     return fail(wall.error, input);
   }
 
-  const resolved = resolveWallClock(wall.value, prefix, zonedNow);
+  const resolved = resolveWallClock(wall.value, anchor, zonedNow);
   if (!resolved.ok) {
     return fail(resolved.error, input);
   }

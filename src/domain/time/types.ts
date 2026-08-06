@@ -18,10 +18,15 @@ export interface WallClock {
   readonly eveningEligible: boolean;
 }
 
-export interface DayPrefix {
-  readonly days: number;
-  readonly explicit: boolean;
-}
+/**
+ * Which day a wall clock belongs to. `offset` comes from heute/morgen/übermorgen
+ * and pins an exact date, `weekday` (ISO 1-7) means the next occurrence of that
+ * day, and `none` lets the time roll forward on its own.
+ */
+export type DayAnchor =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'offset'; readonly days: number }
+  | { readonly kind: 'weekday'; readonly weekday: number };
 
 export type RelativeExpression =
   | { readonly kind: 'duration'; readonly minutes: number }

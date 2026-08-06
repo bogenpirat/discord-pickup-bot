@@ -60,9 +60,9 @@ describe('createAppContext', () => {
 });
 
 describe('registries', () => {
-  it('registers both slash commands with unique names', () => {
+  it('registers every slash command with unique names', () => {
     const names = COMMANDS.map((command) => command.name);
-    expect(names).toEqual(['valo', 'pickup-config']);
+    expect(names).toEqual(['valo', 'valo-time', 'pickup-config']);
     expect(new Set(names).size).toBe(names.length);
   });
 

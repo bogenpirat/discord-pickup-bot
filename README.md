@@ -17,6 +17,7 @@ Discord's own locale.
 | Command | Who | What |
 |---|---|---|
 | `/valo [info]` | everyone | Posts a pickup call to the configured channel |
+| `/valo-time <time>` | creator or admin | Sets the start time of the last posted pickup |
 | `/pickup-config kanal <#channel>` | config access | Where pickup calls are posted |
 | `/pickup-config rolle [@role]` | config access | Role to mention, omit to clear |
 | `/pickup-config emoji <option> [emoji]` | config access | Icon shown for one option, omit to reset |
@@ -27,7 +28,7 @@ Discord's own locale.
 | `/pickup-config steam-liste` | config access | Lists games currently being watched for release |
 | `/pickup-config steam-entfernen <id>` | config access | Stops watching a game |
 
-English clients see `/valo info:` and
+English clients see `/valo info:`, `/valo-time time:` and
 `/pickup-config channel|role|timezone|emoji|show|admin-role|steam-channel|steam-list|steam-remove`.
 
 ### Icons
@@ -69,15 +70,16 @@ anyone holding the admin role could hand it to another role and widen access on 
 ### `/valo`
 
 One optional free-text field. Anything you type goes in, and the bot pulls a start time out
-of it opportunistically; whatever is left over becomes the note shown on the message.
+of it opportunistically. **The text is never edited down** — it is shown in full as the note
+on the message, time words included, so nothing a caller wrote can go missing.
 
 | You type | Start time | Note |
 |---|---|---|
 | `/valo` | — | — |
-| `/valo 20:30` | 20:30 | — |
-| `/valo wer hat bock auf ranked um halb 9` | 20:30 | wer hat bock auf ranked |
-| `/valo in 90 Minuten unrated` | now + 90 min | unrated |
-| `/valo morgen 20:30 ranked grind` | tomorrow 20:30 | ranked grind |
+| `/valo 20:30` | 20:30 | 20:30 |
+| `/valo wer hat bock auf ranked um halb 9` | 20:30 | wer hat bock auf ranked um halb 9 |
+| `/valo in 90 Minuten unrated` | now + 90 min | in 90 Minuten unrated |
+| `/valo Sonntag 20 Uhr ranked` | next Sunday 20:00 | Sonntag 20 Uhr ranked |
 | `/valo brauchen noch 2 leute` | — | brauchen noch 2 leute |
 
 Recognised time formats, German and English:
@@ -87,17 +89,41 @@ Recognised time formats, German and English:
   `viertel 9` → 20:15, `dreiviertel 9` → 20:45, `half past 8`, `quarter to 9`
 - `in 90 Minuten`, `in 1,5 Stunden`, `in einer halben Stunde`, `in 2h`, `gleich`
 - `morgen 20:30`, `übermorgen 20 Uhr`, `heute 22:00`, `tomorrow 8pm`
+- `Sonntag 20 Uhr`, `am Sonntag um 20:30`, `Sonntagabend 8`, `sunday 8pm`
+- A filler `um`, `ab`, `gegen`, `at`, `around` or `@` in front of the time is ignored
 
 A bare small hour means the evening: `8` is 20:00. Write `8:00` if you really mean the
-morning. A time that has already passed rolls to the next day. A filler `um`, `ab` or
-`gegen` in front of the time is dropped from the note.
+morning. A time that has already passed rolls to the next day.
+
+**Weekdays need a time.** `Sonntag 20 Uhr` is next Sunday at 20:00, but `Sonntagabend` on
+its own sets no start time at all — the bot will not guess an hour, and the word still shows
+up in the note. A weekday names today only while that time is still ahead; `Montag 8:00`
+said on Monday afternoon means next Monday. Dayparts (`abend`, `morgen`, `evening`) are
+read as part of the day word, not as an hour of their own.
 
 A **bare number is only read as a time when it is the entire message**, so
 `brauchen noch 2 leute` keeps its `2` instead of calling a game for 14:00. Write `20:30`,
 `20 Uhr` or `halb 9` and it is picked up anywhere in the sentence.
 
 Parsed times render as a Discord timestamp, so everyone sees them in their own timezone.
-If no time is found, nothing is refused — the whole text simply becomes the note.
+If no time is found, nothing is refused — the pickup is posted without a start time and the
+bot points you at `/valo-time`.
+
+### `/valo-time`
+
+Corrects the start time of the **last pickup posted in the server**, for when the time was
+missing, wrong, or only decided later. The creator and anyone with Manage Server may use it;
+closed pickups are refused.
+
+| You type | Result |
+|---|---|
+| `/valo-time 20:30` | Start becomes 20:30, embed updates in place |
+| `/valo-time Sonntag 20 Uhr` | Start becomes next Sunday 20:00 |
+| `/valo-time in 90 Minuten` | Start becomes now + 90 min |
+| `/valo-time irgendwann halt` | Shown verbatim as the start, with a hint about the formats |
+
+It accepts the same formats as `/valo`, but reads the **whole** field as a time rather than
+hunting for one inside a sentence. The note is left exactly as it was.
 
 ### Responding
 

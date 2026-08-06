@@ -42,6 +42,9 @@ export interface Strings {
   readonly posted: (url: string) => string;
   readonly timeNotUnderstood: string;
   readonly noTimeFound: string;
+  readonly noPickupToEdit: string;
+  readonly notAllowedToEditTime: string;
+  readonly timeUpdated: (url: string) => string;
   readonly unexpectedError: string;
   readonly steamWatchChannelSaved: (channelId: string) => string;
   readonly steamWatchListEmpty: string;
@@ -105,9 +108,12 @@ const de: Strings = {
   notSet: 'nicht gesetzt',
   posted: (url) => `Pickup gepostet: ${url}`,
   timeNotUnderstood:
-    'Die Zeit habe ich nicht verstanden und zeige sie unverändert an. Verstanden werden z. B. `20:30`, `20 Uhr`, `halb 9`, `viertel vor 9`, `in 90 Minuten`, `morgen 20:30`.',
+    'Die Zeit habe ich nicht verstanden und zeige sie unverändert an. Verstanden werden z. B. `20:30`, `20 Uhr`, `halb 9`, `viertel vor 9`, `in 90 Minuten`, `morgen 20:30`, `Sonntag 20 Uhr`.',
   noTimeFound:
-    'Ich habe keine Uhrzeit gefunden und zeige deinen Text als Notiz. Erkannt werden z. B. `20:30`, `20 Uhr`, `halb 9`, `viertel vor 9`, `in 90 Minuten`, `morgen 20:30`.',
+    'Ich habe keine Uhrzeit gefunden und zeige deinen Text als Notiz. Erkannt werden z. B. `20:30`, `20 Uhr`, `halb 9`, `viertel vor 9`, `in 90 Minuten`, `morgen 20:30`, `Sonntag 20 Uhr`. Mit `/valo-time` kannst du die Zeit nachtragen.',
+  noPickupToEdit: 'Hier wurde noch kein Pickup gepostet, den ich ändern könnte.',
+  notAllowedToEditTime: 'Nur der Ersteller oder ein Admin kann die Zeit ändern.',
+  timeUpdated: (url) => `Zeit geändert: ${url}`,
   unexpectedError: 'Da ist etwas schiefgelaufen. Bitte versuch es noch einmal.',
   steamWatchChannelSaved: (channelId) => `Steam-Release-Kanal ist jetzt <#${channelId}>.`,
   steamWatchListEmpty: 'Gerade wird kein Spiel beobachtet.',
@@ -154,9 +160,12 @@ const en: Strings = {
   notSet: 'not set',
   posted: (url) => `Pickup posted: ${url}`,
   timeNotUnderstood:
-    'I could not read that time and will show it as written. Understood formats include `20:30`, `8pm`, `half past 8`, `in 90 minutes`, `tomorrow 8pm`.',
+    'I could not read that time and will show it as written. Understood formats include `20:30`, `8pm`, `half past 8`, `in 90 minutes`, `tomorrow 8pm`, `sunday 8pm`.',
   noTimeFound:
-    'I did not find a time in there and will show your text as a note. Recognised formats include `20:30`, `8pm`, `half past 8`, `in 90 minutes`, `tomorrow 8pm`.',
+    'I did not find a time in there and will show your text as a note. Recognised formats include `20:30`, `8pm`, `half past 8`, `in 90 minutes`, `tomorrow 8pm`, `sunday 8pm`. Use `/valo-time` to add one afterwards.',
+  noPickupToEdit: 'No pickup has been posted here yet that I could change.',
+  notAllowedToEditTime: 'Only the creator or an admin can change the time.',
+  timeUpdated: (url) => `Time changed: ${url}`,
   unexpectedError: 'Something went wrong. Please try again.',
   steamWatchChannelSaved: (channelId) => `Steam release channel is now <#${channelId}>.`,
   steamWatchListEmpty: 'No games are currently being watched.',

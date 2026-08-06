@@ -54,7 +54,7 @@ const execute = async (
     return;
   }
 
-  const info = interaction.options.getString('info') ?? '';
+  const info = (interaction.options.getString('info') ?? '').trim();
   const extracted = extractStartTime(info, settings.timezone, context.now());
 
   const pickupId = context.pickups.create({
@@ -63,7 +63,7 @@ const execute = async (
     creatorId: interaction.user.id,
     startsAt: extracted.startsAt === null ? null : extracted.startsAt.epochMilliseconds,
     startsAtText: null,
-    note: extracted.note,
+    note: info === '' ? null : info,
   });
 
   const pickup = context.pickups.findById(pickupId);
@@ -83,8 +83,7 @@ const execute = async (
     );
     context.pickups.attachMessage(pickupId, message.id);
 
-    const notice =
-      info.trim() !== '' && extracted.startsAt === null ? `\n${strings.noTimeFound}` : '';
+    const notice = info !== '' && extracted.startsAt === null ? `\n${strings.noTimeFound}` : '';
     await interaction.editReply({ content: `${strings.posted(message.url)}${notice}` });
   } catch (error) {
     context.pickups.remove(pickupId);

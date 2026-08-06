@@ -3,21 +3,19 @@ import { parseStartTime } from './parseStartTime.ts';
 const MAX_WINDOW = 4;
 const EDGE_PUNCTUATION = /^[\s.,;:!?()[\]"'„“”-]+|[\s.,;:!?()[\]"'„“”-]+$/g;
 const BARE_NUMBER = /^\d{1,2}$/;
-const FILLERS = new Set(['um', 'ab', 'gegen', 'at', 'around', '@']);
 
 export interface ExtractedTime {
   readonly startsAt: Temporal.ZonedDateTime | null;
   readonly matched: string | null;
-  readonly note: string | null;
 }
 
 const trimEdges = (value: string): string => value.replace(EDGE_PUNCTUATION, '');
 
-const toNote = (tokens: readonly string[]): string | null => {
-  const note = trimEdges(tokens.join(' ').replace(/\s+/g, ' '));
-  return note === '' ? null : note;
-};
-
+/**
+ * Finds a start time inside free text. The text itself is left alone — callers
+ * keep showing it in full, so the matched words are reported rather than
+ * removed.
+ */
 export const extractStartTime = (
   input: string,
   timeZone: string,
@@ -29,7 +27,7 @@ export const extractStartTime = (
     .filter((token) => token !== '');
 
   if (tokens.length === 0) {
-    return { startsAt: null, matched: null, note: null };
+    return { startsAt: null, matched: null };
   }
 
   for (let size = Math.min(MAX_WINDOW, tokens.length); size >= 1; size -= 1) {
@@ -49,20 +47,9 @@ export const extractStartTime = (
         continue;
       }
 
-      const before = tokens.slice(0, start);
-      const previous = before.at(-1);
-      const withoutFiller =
-        previous !== undefined && FILLERS.has(trimEdges(previous).toLowerCase())
-          ? before.slice(0, -1)
-          : before;
-
-      return {
-        startsAt: parsed.value,
-        matched: candidate,
-        note: toNote([...withoutFiller, ...tokens.slice(start + size)]),
-      };
+      return { startsAt: parsed.value, matched: candidate };
     }
   }
 
-  return { startsAt: null, matched: null, note: toNote(tokens) };
+  return { startsAt: null, matched: null };
 };

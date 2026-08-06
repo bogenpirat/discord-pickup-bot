@@ -132,6 +132,103 @@ describe('day prefixes', () => {
   it('rejects a relative expression behind an explicit day prefix', () => {
     expectError('morgen in 2h', 'unrecognized');
   });
+
+  it('reads a daypart behind an explicit day prefix', () => {
+    expectWall('morgen abend 20:30', '2026-07-28T20:30');
+  });
+});
+
+describe('weekdays', () => {
+  // summerAfternoon is Monday 2026-07-27, 15:00 in Berlin.
+  it.each([
+    ['montag 20:30', '2026-07-27T20:30'],
+    ['dienstag 20:30', '2026-07-28T20:30'],
+    ['mittwoch 20:30', '2026-07-29T20:30'],
+    ['donnerstag 20:30', '2026-07-30T20:30'],
+    ['freitag 20:30', '2026-07-31T20:30'],
+    ['samstag 20:30', '2026-08-01T20:30'],
+    ['sonnabend 20:30', '2026-08-01T20:30'],
+    ['sonntag 20:30', '2026-08-02T20:30'],
+    ['sunday 8:30 pm', '2026-08-02T20:30'],
+    ['Sonntag 20 Uhr', '2026-08-02T20:00'],
+  ])('parses %s', (input, expected) => {
+    expectWall(input, expected);
+  });
+
+  it.each([
+    ['sonntagabend 20:30', '2026-08-02T20:30'],
+    ['sonntag abend 20:30', '2026-08-02T20:30'],
+    ['sonntagmorgen 9:30', '2026-08-02T09:30'],
+    ['sonntags 20:30', '2026-08-02T20:30'],
+    ['sunday evening 8:30 pm', '2026-08-02T20:30'],
+  ])('swallows the daypart in %s', (input, expected) => {
+    expectWall(input, expected);
+  });
+
+  it.each([
+    ['am sonntag 20:30', '2026-08-02T20:30'],
+    ['sonntag um 20:30', '2026-08-02T20:30'],
+    ['am sonntag um 20:30', '2026-08-02T20:30'],
+    ['on sunday at 8:30 pm', '2026-08-02T20:30'],
+    ['sonntag gegen 20:30', '2026-08-02T20:30'],
+  ])('ignores filler words in %s', (input, expected) => {
+    expectWall(input, expected);
+  });
+
+  it('keeps today when the named day is today and the time is still ahead', () => {
+    expectWall('montag 20:30', '2026-07-27T20:30');
+  });
+
+  it('jumps a full week when the named day is today but the time has passed', () => {
+    expectWall('montag 8:00', '2026-08-03T08:00');
+    expectWall('montag 20:30', '2026-08-03T20:30', at('2026-07-27T19:30:00Z'));
+  });
+
+  it('applies the evening preference to a bare hour', () => {
+    expectWall('sonntag 8', '2026-08-02T20:00');
+    expectWall('sonntagabend 8', '2026-08-02T20:00');
+  });
+
+  it.each(['sonntag', 'sonntagabend', 'am sonntag', 'sonntag abend', 'sunday evening'])(
+    'rejects %s without a time',
+    (input) => {
+      expectError(input, 'unrecognized');
+    },
+  );
+
+  it('rejects a relative expression behind a weekday', () => {
+    expectError('sonntag in 2h', 'unrecognized');
+  });
+
+  it('keeps the wall clock across a dst boundary', () => {
+    const result = parse('sonntag 20:30', at('2027-03-25T12:00:00Z'));
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.toPlainDateTime().toString({ smallestUnit: 'minute' })).toBe(
+        '2027-03-28T20:30',
+      );
+      expect(result.value.offset).toBe('+02:00');
+    }
+  });
+});
+
+describe('filler words', () => {
+  it.each([
+    ['um 20:30', '2026-07-27T20:30'],
+    ['ab 20:30', '2026-07-27T20:30'],
+    ['gegen 21 uhr', '2026-07-27T21:00'],
+    ['at 8:30 pm', '2026-07-27T20:30'],
+    ['around 8:30 pm', '2026-07-27T20:30'],
+    ['@ 20:30', '2026-07-27T20:30'],
+    ['@20:30', '2026-07-27T20:30'],
+    ['ab jetzt', '2026-07-27T15:00'],
+  ])('parses %s', (input, expected) => {
+    expectWall(input, expected);
+  });
+
+  it('leaves a meridiem alone', () => {
+    expectWall('8 am', '2026-07-28T08:00');
+  });
 });
 
 describe('evening preference', () => {

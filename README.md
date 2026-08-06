@@ -17,7 +17,7 @@ Discord's own locale.
 | Command | Who | What |
 |---|---|---|
 | `/valo [info]` | everyone | Posts a pickup call to the configured channel |
-| `/valo-time <time>` | creator or admin | Sets the start time of the last posted pickup |
+| `/valo-time <time>` | creator or config access | Sets the start time of the last posted pickup |
 | `/pickup-config kanal <#channel>` | config access | Where pickup calls are posted |
 | `/pickup-config rolle [@role]` | config access | Role to mention, omit to clear |
 | `/pickup-config emoji <option> [emoji]` | config access | Icon shown for one option, omit to reset |
@@ -112,8 +112,9 @@ bot points you at `/valo-time`.
 ### `/valo-time`
 
 Corrects the start time of the **last pickup posted in the server**, for when the time was
-missing, wrong, or only decided later. The creator and anyone with Manage Server may use it;
-closed pickups are refused.
+missing, wrong, or only decided later. Usable by the pickup's creator and by anyone with
+config access — Manage Server, a power user, or the configured admin role. Closed pickups
+are refused.
 
 | You type | Result |
 |---|---|

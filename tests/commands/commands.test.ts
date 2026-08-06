@@ -629,8 +629,11 @@ describe('/valo-time', () => {
   const at = (iso: string) => Temporal.Instant.from(iso).epochMilliseconds;
 
   /** Posts a pickup so there is something to correct afterwards. */
-  const posted = async (info = 'spazierrunde sonntagabend') => {
-    const context = createTestContext();
+  const posted = async (
+    info = 'spazierrunde sonntagabend',
+    powerUserIds: readonly string[] = [],
+  ) => {
+    const context = createTestContext(undefined, powerUserIds);
     context.settings.setPickupChannel('guild-1', 'channel-1');
     const fake = createFakeCommandInteraction({ strings: { info } });
     await valoCommand.execute(fake.interaction, context);
@@ -747,6 +750,50 @@ describe('/valo-time', () => {
     await valoTimeCommand.execute(fake.interaction, context);
 
     expect(stored(context)?.startsAt).toBe(at('2026-07-27T18:30:00Z'));
+  });
+
+  it('lets a member holding the configured admin role correct a pickup', async () => {
+    const context = await posted();
+    context.settings.setConfigRole('guild-1', ADMIN_ROLE);
+    const fake = createFakeCommandInteraction({
+      userId: 'user-2',
+      manageGuild: false,
+      roleIds: [ADMIN_ROLE],
+      strings: { time: '20:30' },
+    });
+
+    await valoTimeCommand.execute(fake.interaction, context);
+
+    expect(stored(context)?.startsAt).toBe(at('2026-07-27T18:30:00Z'));
+  });
+
+  it('lets a power user correct a pickup', async () => {
+    const context = await posted('spazierrunde sonntagabend', ['power-1']);
+    const fake = createFakeCommandInteraction({
+      userId: 'power-1',
+      manageGuild: false,
+      strings: { time: '20:30' },
+    });
+
+    await valoTimeCommand.execute(fake.interaction, context);
+
+    expect(stored(context)?.startsAt).toBe(at('2026-07-27T18:30:00Z'));
+  });
+
+  it('still refuses a member holding some other role', async () => {
+    const context = await posted();
+    context.settings.setConfigRole('guild-1', ADMIN_ROLE);
+    const fake = createFakeCommandInteraction({
+      userId: 'user-2',
+      manageGuild: false,
+      roleIds: ['role-other'],
+      strings: { time: '20:30' },
+    });
+
+    await valoTimeCommand.execute(fake.interaction, context);
+
+    expect(stored(context)?.startsAt).toBeNull();
+    expect(fake.messages().join(' ')).toContain('Nur der Ersteller');
   });
 
   it('refuses a closed pickup', async () => {

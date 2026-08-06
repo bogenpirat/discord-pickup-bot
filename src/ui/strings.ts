@@ -112,7 +112,8 @@ const de: Strings = {
   noTimeFound:
     'Ich habe keine Uhrzeit gefunden und zeige deinen Text als Notiz. Erkannt werden z. B. `20:30`, `20 Uhr`, `halb 9`, `viertel vor 9`, `in 90 Minuten`, `morgen 20:30`, `Sonntag 20 Uhr`. Mit `/valo-time` kannst du die Zeit nachtragen.',
   noPickupToEdit: 'Hier wurde noch kein Pickup gepostet, den ich ändern könnte.',
-  notAllowedToEditTime: 'Nur der Ersteller oder ein Admin kann die Zeit ändern.',
+  notAllowedToEditTime:
+    'Nur der Ersteller, ein Admin oder die konfigurierte Admin-Rolle kann die Zeit ändern.',
   timeUpdated: (url) => `Zeit geändert: ${url}`,
   unexpectedError: 'Da ist etwas schiefgelaufen. Bitte versuch es noch einmal.',
   steamWatchChannelSaved: (channelId) => `Steam-Release-Kanal ist jetzt <#${channelId}>.`,
@@ -164,7 +165,8 @@ const en: Strings = {
   noTimeFound:
     'I did not find a time in there and will show your text as a note. Recognised formats include `20:30`, `8pm`, `half past 8`, `in 90 minutes`, `tomorrow 8pm`, `sunday 8pm`. Use `/valo-time` to add one afterwards.',
   noPickupToEdit: 'No pickup has been posted here yet that I could change.',
-  notAllowedToEditTime: 'Only the creator or an admin can change the time.',
+  notAllowedToEditTime:
+    'Only the creator, an admin or the configured admin role can change the time.',
   timeUpdated: (url) => `Time changed: ${url}`,
   unexpectedError: 'Something went wrong. Please try again.',
   steamWatchChannelSaved: (channelId) => `Steam release channel is now <#${channelId}>.`,

@@ -6,7 +6,7 @@ import {
 } from 'discord.js';
 import type { AppContext } from '../app/context.ts';
 import type { PickupRecord } from '../db/repositories/pickupRepository.ts';
-import { isGuildManager } from '../discord/permissions.ts';
+import { canUseConfig } from '../discord/permissions.ts';
 import { replyEphemeral } from '../discord/reply.ts';
 import type { SlashCommand } from '../discord/types.ts';
 import { parseStartTime } from '../domain/time/parseStartTime.ts';
@@ -67,6 +67,8 @@ const execute = async (
     return;
   }
 
+  const settings = context.settings.get(guildId);
+
   await context.mutex.runExclusive(`pickup:${latest.id}`, async () => {
     const pickup = context.pickups.findById(latest.id);
     if (pickup === undefined) {
@@ -75,7 +77,7 @@ const execute = async (
     }
 
     const isCreator = pickup.creatorId === interaction.user.id;
-    if (!isCreator && !isGuildManager(interaction)) {
+    if (!isCreator && !canUseConfig(interaction, settings, context.powerUserIds)) {
       await interaction.editReply({ content: strings.notAllowedToEditTime });
       return;
     }
@@ -91,7 +93,6 @@ const execute = async (
       return;
     }
 
-    const settings = context.settings.get(guildId);
     const raw = interaction.options.getString('time', true).trim();
     const parsed = parseStartTime(raw, settings.timezone, context.now());
 

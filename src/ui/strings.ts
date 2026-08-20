@@ -12,6 +12,8 @@ export const resolveLocale = (discordLocale: string | null | undefined): AppLoca
 export interface Strings {
   readonly choice: Readonly<Record<PickupChoice, string>>;
   readonly closeButton: string;
+  readonly calendarTitle: (guildName: string | null) => string;
+  readonly calendarDetails: (messageUrl: string) => string;
   readonly title: string;
   readonly noneYet: string;
   readonly moreNames: (count: number) => string;
@@ -73,6 +75,9 @@ export interface ConfigSummaryParts {
 const de: Strings = {
   choice: { in: 'Dabei', later: 'Später', out: 'Raus' },
   closeButton: 'Schließen',
+  calendarTitle: (guildName) =>
+    guildName === null ? 'Gaming-Session' : `Gaming-Session @ ${guildName}`,
+  calendarDetails: (messageUrl) => `Organisiert über Discord: ${messageUrl}`,
   title: 'Pickup',
   noneYet: '—',
   moreNames: (count) => `… +${count} weitere`,
@@ -129,6 +134,9 @@ const de: Strings = {
 const en: Strings = {
   choice: { in: 'In', later: 'Later', out: 'Out' },
   closeButton: 'Close',
+  calendarTitle: (guildName) =>
+    guildName === null ? 'Gaming session' : `Gaming session @ ${guildName}`,
+  calendarDetails: (messageUrl) => `Organised via Discord: ${messageUrl}`,
   title: 'Pickup',
   noneYet: '—',
   moreNames: (count) => `… +${count} more`,

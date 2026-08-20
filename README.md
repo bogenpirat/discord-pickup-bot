@@ -126,6 +126,25 @@ are refused.
 It accepts the same formats as `/valo`, but reads the **whole** field as a time rather than
 hunting for one inside a sentence. The note is left exactly as it was.
 
+### Adding it to your calendar
+
+A pickup with a **discrete start time** carries an extra 📅 button — emoji only, no label —
+that opens Google Calendar with the event prefilled. The event is titled
+`Gaming-Session @ <server name>` (`Gaming session @ …` in English), starts at the pickup
+time, and runs two hours by default. Its details link back to the pickup message, so the
+calendar entry always points at the current tally.
+
+The button only appears when the time was actually recognised. A pickup without a time, or
+one whose time is only shown verbatim (`/valo-time irgendwann halt`), has no button — there
+would be nothing to put in the `dates` field. Filling the time in later with `/valo-time`
+adds the button to the existing message.
+
+It stays clickable on a closed pickup: closing ends the signups, not the game.
+
+Because the message link is part of the event, `/valo` posts the message and then rewrites it
+once Discord has handed out the message id. If that second write fails the pickup stands as
+posted, only without the button.
+
 ### Responding
 
 Clicking a button records your choice. Clicking the **same** button again withdraws it;
@@ -336,7 +355,7 @@ npm run check      # biome + tsc + tests with coverage thresholds
 ## Layout
 
 ```
-src/domain/     pure logic: time parsing, response transitions (no discord.js, no SQL)
+src/domain/     pure logic: time parsing, calendar links, response transitions (no discord.js, no SQL)
 src/db/         schema, migrations, repositories
 src/ui/         renders domain values into Discord messages, de/en strings
 src/discord/    client, custom ids, command and button dispatch

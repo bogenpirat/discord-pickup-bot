@@ -18,6 +18,50 @@ export const silentLogger = (): Logger =>
     fatal: () => undefined,
   }) as unknown as Logger;
 
+export interface LogRecord {
+  readonly level: string;
+  readonly fields: Record<string, unknown>;
+  readonly message: string;
+}
+
+export interface RecordingLogger {
+  readonly logger: Logger;
+  readonly records: LogRecord[];
+  readonly messages: (level?: string) => string[];
+  readonly find: (message: string) => LogRecord | undefined;
+}
+
+/** A logger that keeps every call, so tests can assert on what was logged. */
+export const recordingLogger = (): RecordingLogger => {
+  const records: LogRecord[] = [];
+
+  const record =
+    (level: string) =>
+    (first: unknown, second?: unknown): undefined => {
+      records.push(
+        typeof first === 'string'
+          ? { level, fields: {}, message: first }
+          : { level, fields: (first ?? {}) as Record<string, unknown>, message: String(second) },
+      );
+      return undefined;
+    };
+
+  return {
+    logger: {
+      info: record('info'),
+      warn: record('warn'),
+      error: record('error'),
+      debug: record('debug'),
+      trace: record('trace'),
+      fatal: record('fatal'),
+    } as unknown as Logger,
+    records,
+    messages: (level) =>
+      records.filter((entry) => level === undefined || entry.level === level).map((e) => e.message),
+    find: (message) => records.find((entry) => entry.message === message),
+  };
+};
+
 export interface TestContext extends AppContext {
   readonly database: DatabaseSync;
 }

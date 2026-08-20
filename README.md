@@ -317,6 +317,24 @@ Then `/valo 20:30` to try it. If the commands do not appear, see below.
 | Message posts but the role is not pinged | Missing *Mention All Roles*, and the role is not mentionable — see step 6 |
 | Embed missing, message looks empty | *Embed Links* not granted |
 
+### Following the Steam watcher
+
+The release watcher logs what it is doing, so `docker compose logs -f bot` is enough to see
+whether it is alive and what it thinks about each game (`LOG_LEVEL=debug` additionally shows
+the links it decided not to watch):
+
+| Log line | When |
+|---|---|
+| `steam watch poller started` | On boot, with the number of games tracked |
+| `watching steam game for release` | On boot, once per tracked game — name, status, known release date, next check |
+| `steam watch tick started` / `tick finished` | Each hourly check, with how many games were due and how they turned out |
+| `now watching steam game for release` | A Steam link was posted and the bot started tracking that game |
+| `steam game still unreleased, ...` | A checked game has not launched yet — with the release date if Steam now names one |
+| `steam game released, announced in channel and stopped watching` | The release was found and the channel was notified |
+
+Anything that goes wrong — a failed Steam lookup, an app that vanished from the store, a
+channel the bot can no longer post in — is logged as a warning or error and retried.
+
 ## Running with Docker
 
 ```sh

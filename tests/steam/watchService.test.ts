@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { SteamAppDetails } from '../../src/domain/steam/parseAppDetails.ts';
 import type { SteamClient, SteamLookupResult } from '../../src/steam/client.ts';
 import { processDueWatch, recordDetectedGame } from '../../src/steam/watchService.ts';
-import { createTestContext } from '../helpers/fakes.ts';
+import { createTestContext, recordingLogger } from '../helpers/fakes.ts';
 
 const APP_ID = 1245620;
 const GUILD = 'guild-1';
@@ -409,5 +409,163 @@ describe('processDueWatch', () => {
     const updated = context.steamWatches.findById(row.id);
     expect(updated).toBeDefined();
     expect(updated?.nextCheckAt).toBe(NOW.add({ hours: 1 }).epochMilliseconds);
+  });
+});
+
+describe('steam watch logging', () => {
+  const seedRow = (context: ReturnType<typeof createTestContext>) => {
+    const id = context.steamWatches.create({
+      guildId: GUILD,
+      channelId: CHANNEL,
+      messageId: MESSAGE,
+      appId: APP_ID,
+      gameName: 'ELDEN RING',
+      status: 'pending',
+      releaseDate: null,
+      releaseDateText: 'Q2 2026',
+      nextCheckAt: NOW.epochMilliseconds,
+    });
+    const row = context.steamWatches.findById(id as number);
+    if (row === undefined) throw new Error('setup failed');
+    return row;
+  };
+
+  it('logs the game it starts watching', async () => {
+    const log = recordingLogger();
+    const context = { ...createTestContext(NOW), logger: log.logger };
+
+    await recordDetectedGame(
+      context,
+      fakeSteamClient({ kind: 'found', details: details({ releaseDateText: '1 Sep, 2026' }) }),
+      detectInput,
+    );
+
+    expect(log.find('now watching steam game for release')?.fields).toMatchObject({
+      appId: APP_ID,
+      game: 'ELDEN RING',
+      status: 'scheduled',
+      releaseDateText: '1 Sep, 2026',
+    });
+  });
+
+  it('logs a status line for a game that is still without a release date', async () => {
+    const log = recordingLogger();
+    const context = { ...createTestContext(NOW), logger: log.logger };
+
+    const outcome = await processDueWatch(
+      context,
+      fakeSteamClient({ kind: 'found', details: details() }),
+      fakeDiscordClient(null),
+      seedRow(context),
+    );
+
+    expect(outcome).toBe('pending');
+    expect(log.find('steam game still unreleased, no release date yet')?.fields).toMatchObject({
+      game: 'ELDEN RING',
+      status: 'pending',
+      nextCheckAt: NOW.add({ hours: 24 * 7 }).toString(),
+    });
+  });
+
+  it('logs a status line with the date once one is known', async () => {
+    const log = recordingLogger();
+    const context = { ...createTestContext(NOW), logger: log.logger };
+
+    const outcome = await processDueWatch(
+      context,
+      fakeSteamClient({ kind: 'found', details: details({ releaseDateText: '1 Sep, 2026' }) }),
+      fakeDiscordClient(null),
+      seedRow(context),
+    );
+
+    expect(outcome).toBe('scheduled');
+    expect(log.find('steam game still unreleased, release date known')?.fields).toMatchObject({
+      status: 'scheduled',
+      releaseDateText: '1 Sep, 2026',
+    });
+  });
+
+  it('logs the release once the announcement has been posted', async () => {
+    const log = recordingLogger();
+    const context = { ...createTestContext(NOW), logger: log.logger };
+    const sent: unknown[] = [];
+
+    const outcome = await processDueWatch(
+      context,
+      fakeSteamClient({ kind: 'found', details: details({ comingSoon: false }) }),
+      fakeDiscordClient(sendableChannel(sent)),
+      seedRow(context),
+    );
+
+    expect(outcome).toBe('released');
+    expect(
+      log.find('steam game released, announced in channel and stopped watching')?.fields,
+    ).toMatchObject({ appId: APP_ID, game: 'ELDEN RING', channelId: CHANNEL });
+  });
+
+  it('does not count a release as announced when the channel is gone', async () => {
+    const log = recordingLogger();
+    const context = { ...createTestContext(NOW), logger: log.logger };
+    const row = seedRow(context);
+
+    const outcome = await processDueWatch(
+      context,
+      fakeSteamClient({ kind: 'found', details: details({ comingSoon: false }) }),
+      fakeDiscordClient(null),
+      row,
+    );
+
+    expect(outcome).toBe('announce-failed');
+    expect(log.find('steam watch channel unavailable, retrying later')?.level).toBe('warn');
+    expect(context.steamWatches.findById(row.id)).toBeDefined();
+  });
+
+  it('does not count a release as announced when sending throws', async () => {
+    const log = recordingLogger();
+    const context = { ...createTestContext(NOW), logger: log.logger };
+
+    const outcome = await processDueWatch(
+      context,
+      fakeSteamClient({ kind: 'found', details: details({ comingSoon: false }) }),
+      fakeDiscordClient(sendableChannel([], true)),
+      seedRow(context),
+    );
+
+    expect(outcome).toBe('announce-failed');
+    expect(
+      log.find('failed to send steam release announcement, retrying later')?.fields,
+    ).toMatchObject({ game: 'ELDEN RING' });
+  });
+
+  it('warns, and keeps the schedule, when the steam lookup fails', async () => {
+    const log = recordingLogger();
+    const context = { ...createTestContext(NOW), logger: log.logger };
+
+    const outcome = await processDueWatch(
+      context,
+      fakeSteamClient({ kind: 'error' }),
+      fakeDiscordClient(null),
+      seedRow(context),
+    );
+
+    expect(outcome).toBe('lookup-failed');
+    const warning = log.find('steam lookup failed, keeping the existing schedule');
+    expect(warning?.level).toBe('warn');
+    expect(warning?.fields).toMatchObject({ appId: APP_ID, game: 'ELDEN RING' });
+  });
+
+  it('warns when a watched app disappears from steam', async () => {
+    const log = recordingLogger();
+    const context = { ...createTestContext(NOW), logger: log.logger };
+
+    const outcome = await processDueWatch(
+      context,
+      fakeSteamClient({ kind: 'invalid' }),
+      fakeDiscordClient(null),
+      seedRow(context),
+    );
+
+    expect(outcome).toBe('unavailable');
+    expect(log.find('steam app no longer available, stopped watching')?.level).toBe('warn');
   });
 });

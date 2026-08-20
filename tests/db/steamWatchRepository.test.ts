@@ -172,4 +172,12 @@ describe('steamWatchRepository', () => {
 
     expect(repository.listByGuild(GUILD)).toEqual([]);
   });
+
+  it('lists every watch across guilds, soonest check first', () => {
+    const repository = createSteamWatchRepository(db);
+    newWatch({ guildId: GUILD, appId: 1, nextCheckAt: 3000 });
+    newWatch({ guildId: OTHER_GUILD, appId: 2, nextCheckAt: 1000 });
+
+    expect(repository.listAll().map((w) => w.appId)).toEqual([2, 1]);
+  });
 });

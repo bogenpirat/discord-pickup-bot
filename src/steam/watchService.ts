@@ -7,6 +7,16 @@ import { nextRetryCheck, nextWeeklyCheck, releaseDayInstant } from '../domain/st
 import { DEFAULT_TIME_ZONE } from '../domain/time/timezone.ts';
 import { renderSteamReleaseMessage } from '../ui/steamAnnouncement.ts';
 import type { SteamClient } from './client.ts';
+import { describeWatch } from './watchLog.ts';
+
+/** What one due-check concluded about a game, tallied into the tick summary. */
+export type WatchCheckOutcome =
+  | 'released'
+  | 'announce-failed'
+  | 'scheduled'
+  | 'pending'
+  | 'unavailable'
+  | 'lookup-failed';
 
 export interface DetectedGame {
   readonly guildId: string;
@@ -28,6 +38,10 @@ export const recordDetectedGame = async (
   input: DetectedGame,
 ): Promise<boolean> => {
   if (context.steamWatches.findByGuildAndApp(input.guildId, input.appId) !== undefined) {
+    context.logger.debug(
+      { guildId: input.guildId, appId: input.appId },
+      'steam app already watched, ignoring link',
+    );
     return false;
   }
 
@@ -45,10 +59,18 @@ export const recordDetectedGame = async (
       releaseDateText: null,
       nextCheckAt: nextRetryCheck(context.now()).epochMilliseconds,
     });
+    context.logger.info(
+      { guildId: input.guildId, appId: input.appId },
+      'steam lookup failed while adding a watch, retrying in an hour',
+    );
     return true;
   }
 
   if (lookup.kind === 'invalid') {
+    context.logger.debug(
+      { guildId: input.guildId, appId: input.appId },
+      'steam app id is unknown, not watching',
+    );
     return false;
   }
 
@@ -58,6 +80,10 @@ export const recordDetectedGame = async (
     today(context),
   );
   if (classification.kind === 'released') {
+    context.logger.debug(
+      { guildId: input.guildId, appId: input.appId, game: lookup.details.name },
+      'steam app is already released, not watching',
+    );
     return false;
   }
 
@@ -80,6 +106,17 @@ export const recordDetectedGame = async (
     releaseDateText: lookup.details.releaseDateText,
     nextCheckAt: nextCheckAt.epochMilliseconds,
   });
+  context.logger.info(
+    {
+      guildId: input.guildId,
+      appId: input.appId,
+      game: lookup.details.name,
+      status: classification.kind,
+      releaseDateText: lookup.details.releaseDateText,
+      nextCheckAt: nextCheckAt.toString(),
+    },
+    'now watching steam game for release',
+  );
   return true;
 };
 
@@ -97,12 +134,15 @@ const announceRelease = async (
   discordClient: Client,
   row: SteamWatchRecord,
   details: SteamAppDetails,
-): Promise<void> => {
+): Promise<boolean> => {
   const channel = await discordClient.channels.fetch(row.channelId).catch(() => null);
   if (channel === null || !channel.isTextBased() || !channel.isSendable()) {
-    context.logger.warn({ watchId: row.id }, 'steam watch channel unavailable, retrying later');
+    context.logger.warn(
+      { ...describeWatch(row), channelId: row.channelId },
+      'steam watch channel unavailable, retrying later',
+    );
     retryAnnounceLater(context, row);
-    return;
+    return false;
   }
 
   try {
@@ -111,12 +151,18 @@ const announceRelease = async (
       reply: { messageReference: row.messageId, failIfNotExists: false },
     });
     context.steamWatches.remove(row.id);
+    context.logger.info(
+      { ...describeWatch(row), game: details.name, channelId: row.channelId },
+      'steam game released, announced in channel and stopped watching',
+    );
+    return true;
   } catch (error) {
     context.logger.error(
-      { err: error, watchId: row.id },
-      'failed to send steam release announcement',
+      { err: error, ...describeWatch(row), game: details.name },
+      'failed to send steam release announcement, retrying later',
     );
     retryAnnounceLater(context, row);
+    return false;
   }
 };
 
@@ -125,17 +171,18 @@ export const processDueWatch = async (
   steamClient: SteamClient,
   discordClient: Client,
   row: SteamWatchRecord,
-): Promise<void> => {
+): Promise<WatchCheckOutcome> => {
   const lookup = await steamClient.getAppDetails(row.appId);
 
   if (lookup.kind === 'error') {
-    return;
+    context.logger.warn(describeWatch(row), 'steam lookup failed, keeping the existing schedule');
+    return 'lookup-failed';
   }
 
   if (lookup.kind === 'invalid') {
     context.steamWatches.remove(row.id);
-    context.logger.warn({ watchId: row.id, appId: row.appId }, 'steam app no longer available');
-    return;
+    context.logger.warn(describeWatch(row), 'steam app no longer available, stopped watching');
+    return 'unavailable';
   }
 
   const classification = classifyRelease(
@@ -145,8 +192,8 @@ export const processDueWatch = async (
   );
 
   if (classification.kind === 'released') {
-    await announceRelease(context, discordClient, row, lookup.details);
-    return;
+    const announced = await announceRelease(context, discordClient, row, lookup.details);
+    return announced ? 'released' : 'announce-failed';
   }
 
   const nextCheckAt =
@@ -164,4 +211,21 @@ export const processDueWatch = async (
     releaseDateText: lookup.details.releaseDateText,
     nextCheckAt: nextCheckAt.epochMilliseconds,
   });
+
+  context.logger.info(
+    {
+      watchId: row.id,
+      guildId: row.guildId,
+      appId: row.appId,
+      game: lookup.details.name,
+      status: classification.kind,
+      releaseDateText: lookup.details.releaseDateText,
+      nextCheckAt: nextCheckAt.toString(),
+    },
+    classification.kind === 'scheduled'
+      ? 'steam game still unreleased, release date known'
+      : 'steam game still unreleased, no release date yet',
+  );
+
+  return classification.kind === 'scheduled' ? 'scheduled' : 'pending';
 };

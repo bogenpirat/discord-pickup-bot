@@ -47,6 +47,7 @@ export interface SteamWatchRepository {
   remove(id: number): void;
   removeForGuild(guildId: string, id: number): boolean;
   listByGuild(guildId: string): SteamWatchRecord[];
+  listAll(): SteamWatchRecord[];
 }
 
 const toWatch = (row: SqlRow): SteamWatchRecord => ({
@@ -90,6 +91,7 @@ export const createSteamWatchRepository = (db: DatabaseSync): SteamWatchReposito
   const byGuildStatement = db.prepare(
     'SELECT * FROM steam_watches WHERE guild_id = ? ORDER BY created_at DESC, id DESC',
   );
+  const allStatement = db.prepare('SELECT * FROM steam_watches ORDER BY next_check_at ASC, id ASC');
 
   return {
     create: (input) => {
@@ -134,5 +136,6 @@ export const createSteamWatchRepository = (db: DatabaseSync): SteamWatchReposito
     },
     removeForGuild: (guildId, id) => deleteForGuildStatement.run(id, guildId).changes > 0,
     listByGuild: (guildId) => (byGuildStatement.all(guildId) as SqlRow[]).map(toWatch),
+    listAll: () => (allStatement.all() as SqlRow[]).map(toWatch),
   };
 };

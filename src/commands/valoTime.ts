@@ -61,6 +61,7 @@ const execute = async (
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const guildId = interaction.guildId;
+  const guildName = interaction.guild.name;
   const latest = context.pickups.findLatestPosted(guildId);
   if (latest === undefined) {
     await interaction.editReply({ content: strings.noPickupToEdit });
@@ -113,6 +114,7 @@ const execute = async (
           responses: context.responses.listByPickup(pickup.id),
           mentionRoleId: settings.mentionRoleId,
           emojis: settings.emojis,
+          guildName,
         }),
       );
     } catch (error) {

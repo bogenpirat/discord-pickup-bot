@@ -346,3 +346,135 @@ describe('note', () => {
     expect(payload.embeds[0]?.toJSON().title).toBe('Pickup');
   });
 });
+
+describe('calendar button', () => {
+  const startsAt = Date.UTC(2026, 7, 22, 19, 0);
+
+  const view = (overrides: Partial<PickupRecord>, guildName?: string | null, locale?: AppLocale) =>
+    render({
+      pickup: pickup(overrides),
+      responses: [],
+      mentionRoleId: null,
+      guildName: guildName === undefined ? 'Test Guild' : guildName,
+      ...(locale === undefined ? {} : { locale }),
+    });
+
+  const calendarButton = (
+    overrides: Partial<PickupRecord> = {},
+    guildName?: string | null,
+    locale?: AppLocale,
+  ) =>
+    (view(overrides, guildName, locale).components[0]?.toJSON().components ?? []).find(
+      (component) => 'url' in component && component.url !== undefined,
+    );
+
+  const calendarUrl = (
+    overrides: Partial<PickupRecord> = {},
+    guildName?: string | null,
+    locale?: AppLocale,
+  ) => {
+    const button = calendarButton(overrides, guildName, locale);
+    return button !== undefined && 'url' in button ? (button.url ?? '') : '';
+  };
+
+  it('stays hidden when no discrete time was recognised', () => {
+    expect(calendarButton()).toBeUndefined();
+  });
+
+  it('stays hidden when the time was only understood as text', () => {
+    expect(calendarButton({ startsAtText: 'kurz nach dem Abendessen' })).toBeUndefined();
+  });
+
+  it('appears once a discrete time is known', () => {
+    const button = calendarButton({ startsAt });
+    expect(button).toBeDefined();
+    expect(button !== undefined && 'custom_id' in button ? button.custom_id : undefined).toBe(
+      undefined,
+    );
+  });
+
+  it('carries the calendar emoji and no label', () => {
+    const button = calendarButton({ startsAt });
+    expect(button !== undefined && 'emoji' in button ? button.emoji : undefined).toEqual({
+      name: '📅',
+      animated: false,
+    });
+    expect(button !== undefined && 'label' in button ? button.label : undefined).toBeUndefined();
+  });
+
+  it('sits between the responses and the close button', () => {
+    const labels = view({ startsAt })
+      .components[0]?.toJSON()
+      .components.map((component) => ('label' in component ? component.label : undefined));
+
+    expect(labels).toEqual(['Dabei · 0', 'Später · 0', 'Raus · 0', undefined, 'Schließen']);
+  });
+
+  it('spans the start time and two hours', () => {
+    expect(calendarUrl({ startsAt })).toContain('dates=20260822T190000Z/20260822T210000Z');
+  });
+
+  it('names the guild in the event title', () => {
+    expect(new URL(calendarUrl({ startsAt }, 'Bogenpirat')).searchParams.get('text')).toBe(
+      'Gaming-Session @ Bogenpirat',
+    );
+  });
+
+  it('leaves the note out of the event title', () => {
+    expect(
+      new URL(calendarUrl({ startsAt, note: 'Helldivers 20:30' })).searchParams.get('text'),
+    ).toBe('Gaming-Session @ Test Guild');
+  });
+
+  it('falls back to a bare title when the guild is not in cache', () => {
+    expect(new URL(calendarUrl({ startsAt }, null)).searchParams.get('text')).toBe(
+      'Gaming-Session',
+    );
+  });
+
+  it('links back to the pickup message in the details', () => {
+    const url = new URL(calendarUrl({ startsAt }));
+    expect(url.searchParams.get('details')).toBe(
+      'Organisiert über Discord: https://discord.com/channels/guild-1/channel-1/message-1',
+    );
+  });
+
+  it('omits the details while the message id is still unknown', () => {
+    expect(calendarUrl({ startsAt, messageId: null })).not.toContain('details=');
+  });
+
+  it('translates the event text', () => {
+    const url = new URL(calendarUrl({ startsAt }, 'Bogenpirat', 'en'));
+    expect(url.searchParams.get('text')).toBe('Gaming session @ Bogenpirat');
+    expect(url.searchParams.get('details')).toBe(
+      'Organised via Discord: https://discord.com/channels/guild-1/channel-1/message-1',
+    );
+  });
+
+  it('stays clickable on a closed pickup', () => {
+    const button = calendarButton({ startsAt, status: 'closed', closedAt: 5 });
+    expect(button).toBeDefined();
+    expect(button !== undefined && 'disabled' in button ? button.disabled : undefined).not.toBe(
+      true,
+    );
+  });
+
+  // Discord caps a guild name at 100 characters, which still percent-encodes
+  // past the 512 a link button allows.
+  it.each([
+    ['a plain name', 'Bogenpirat'],
+    ['a maximum length name', 'x'.repeat(100)],
+    ['a name of emoji', '🎮'.repeat(50)],
+    ['a name of umlauts', 'ä'.repeat(100)],
+  ])('keeps the url inside the button limit with %s', (_label, guildName) => {
+    const url = calendarUrl({ startsAt, note: 'x'.repeat(200) }, guildName);
+    expect(url).not.toBe('');
+    expect(url.length).toBeLessThanOrEqual(512);
+    expect(() => new URL(url)).not.toThrow();
+  });
+
+  it('shortens a long guild name without splitting a surrogate pair', () => {
+    const text = new URL(calendarUrl({ startsAt }, '🎮'.repeat(50))).searchParams.get('text');
+    expect(text).toMatch(/^Gaming-Session @ 🎮+$/u);
+  });
+});

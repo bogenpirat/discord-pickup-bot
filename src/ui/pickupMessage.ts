@@ -3,6 +3,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
+  messageLink,
   roleMention,
   TimestampStyles,
   time,
@@ -10,6 +11,7 @@ import {
 } from 'discord.js';
 import type { PickupRecord } from '../db/repositories/pickupRepository.ts';
 import { encodeClose, encodeRespond } from '../discord/customId.ts';
+import { googleCalendarLink } from '../domain/calendar/googleCalendarLink.ts';
 import {
   type ChoiceEmojis,
   emojiFor,
@@ -22,6 +24,11 @@ import { type AppLocale, DEFAULT_LOCALE, type Strings, stringsFor } from './stri
 
 const MAX_NAMES = 15;
 const FIELD_LIMIT = 1024;
+const BUTTON_URL_LIMIT = 512;
+
+/** How long a pickup is assumed to run, for want of an end time on the record. */
+const CALENDAR_DURATION_MINUTES = 120;
+const CALENDAR_EMOJI = '📅';
 
 const BUTTON_STYLES: Readonly<Record<PickupChoice, ButtonStyle>> = {
   in: ButtonStyle.Success,
@@ -33,6 +40,8 @@ export interface PickupView {
   readonly pickup: PickupRecord;
   readonly responses: ResponseSet;
   readonly mentionRoleId: string | null;
+  /** Names the calendar event. Absent when the guild is not in cache. */
+  readonly guildName?: string | null;
   readonly emojis?: ChoiceEmojis;
   readonly locale?: AppLocale;
 }
@@ -102,10 +111,49 @@ const buildEmbed = (view: PickupView, strings: Strings): EmbedBuilder => {
   return embed;
 };
 
+/**
+ * The calendar link only exists once a discrete start time is known. The guild
+ * name rides along in the event title, so it is shortened until the whole URL
+ * fits the limit Discord puts on a link button — by code point, because slicing
+ * a surrogate pair in half would break the encoding.
+ */
+const buildCalendarUrl = (
+  pickup: PickupRecord,
+  guildName: string | null,
+  strings: Strings,
+): string | null => {
+  if (pickup.startsAt === null) {
+    return null;
+  }
+
+  const details =
+    pickup.messageId === null
+      ? undefined
+      : strings.calendarDetails(messageLink(pickup.channelId, pickup.messageId, pickup.guildId));
+
+  const name = guildName === null ? [] : [...guildName];
+
+  for (let length = name.length; length >= 0; length -= 10) {
+    const url = googleCalendarLink({
+      title: strings.calendarTitle(length === 0 ? null : name.slice(0, length).join('')),
+      startsAt: pickup.startsAt,
+      durationMinutes: CALENDAR_DURATION_MINUTES,
+      ...(details === undefined ? {} : { details }),
+    });
+
+    if (url.length <= BUTTON_URL_LIMIT) {
+      return url;
+    }
+  }
+
+  return null;
+};
+
 const buildComponents = (view: PickupView, strings: Strings): ActionRowBuilder<ButtonBuilder>[] => {
   const counts = tally(view.responses);
   const disabled = view.pickup.status === 'closed';
   const emojis = view.emojis ?? NO_CHOICE_EMOJIS;
+  const calendarUrl = buildCalendarUrl(view.pickup, view.guildName ?? null, strings);
 
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     ...PICKUP_CHOICES.map((choice) =>
@@ -116,6 +164,17 @@ const buildComponents = (view: PickupView, strings: Strings): ActionRowBuilder<B
         .setEmoji(emojiFor(choice, emojis))
         .setDisabled(disabled),
     ),
+  );
+
+  // A link button opens Google Calendar directly, so it stays usable even on a
+  // closed pickup — the game itself is still happening.
+  if (calendarUrl !== null) {
+    row.addComponents(
+      new ButtonBuilder().setStyle(ButtonStyle.Link).setEmoji(CALENDAR_EMOJI).setURL(calendarUrl),
+    );
+  }
+
+  row.addComponents(
     new ButtonBuilder()
       .setCustomId(encodeClose(view.pickup.id))
       .setLabel(strings.closeButton)

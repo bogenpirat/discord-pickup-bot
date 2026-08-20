@@ -79,9 +79,33 @@ const execute = async (
         responses: [],
         mentionRoleId: settings.mentionRoleId,
         emojis: settings.emojis,
+        guildName: interaction.guild.name,
       }),
     );
     context.pickups.attachMessage(pickupId, message.id);
+
+    // The calendar link points back at this very message, so it can only be
+    // built on a second pass — Discord hands out the id on send. A failure here
+    // costs the link, not the pickup, which is already up.
+    const posted = context.pickups.findById(pickupId);
+    if (posted !== undefined && posted.startsAt !== null) {
+      await message
+        .edit(
+          renderPickupMessage({
+            pickup: posted,
+            responses: [],
+            mentionRoleId: settings.mentionRoleId,
+            emojis: settings.emojis,
+            guildName: interaction.guild.name,
+          }),
+        )
+        .catch((error: unknown) => {
+          context.logger.warn(
+            { err: error, guildId: interaction.guildId, pickupId },
+            'failed to attach calendar link',
+          );
+        });
+    }
 
     const notice = info !== '' && extracted.startsAt === null ? `\n${strings.noTimeFound}` : '';
     await interaction.editReply({ content: `${strings.posted(message.url)}${notice}` });

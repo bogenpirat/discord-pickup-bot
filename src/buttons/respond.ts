@@ -30,6 +30,7 @@ export const handleRespond = async (
           responses: context.responses.listByPickup(pickup.id),
           mentionRoleId: settings.mentionRoleId,
           emojis: settings.emojis,
+          guildName: interaction.guild?.name ?? null,
         }),
       );
       await replyEphemeral(interaction, strings.pickupAlreadyClosed);
@@ -54,6 +55,7 @@ export const handleRespond = async (
         responses: applied.responses,
         mentionRoleId: settings.mentionRoleId,
         emojis: settings.emojis,
+        guildName: interaction.guild?.name ?? null,
       }),
     );
   });

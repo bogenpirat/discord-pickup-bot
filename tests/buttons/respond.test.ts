@@ -37,6 +37,18 @@ const labelsOf = (payload: unknown): string[] => {
     : [];
 };
 
+/** Digs the calendar link button out of a rendered pickup payload. */
+const calendarUrlIn = (payload: unknown): string | null => {
+  const components = (payload as { components: { toJSON(): { components: unknown[] } }[] })
+    .components;
+  const buttons = (components ?? []).flatMap((row) => row.toJSON().components);
+  const link = buttons.find(
+    (button): button is { url: string } =>
+      typeof button === 'object' && button !== null && 'url' in button,
+  );
+  return link?.url ?? null;
+};
+
 describe('handleRespond', () => {
   it('records a response and re-renders with the new tally', async () => {
     const context = createTestContext();
@@ -243,5 +255,46 @@ describe('handleClose', () => {
     await handleClose(fake.interaction, { action: 'close', pickupId: id }, context);
 
     expect((fake.editedWith() as { content: string }).content).toBe('');
+  });
+});
+
+describe('calendar link on re-render', () => {
+  const seedTimed = (context: TestContext): number => {
+    const id = context.pickups.create({
+      guildId: 'guild-1',
+      channelId: 'channel-1',
+      creatorId: 'creator-1',
+      startsAt: Date.UTC(2026, 7, 22, 19, 0),
+      startsAtText: null,
+      note: null,
+    });
+    context.pickups.attachMessage(id, 'message-1');
+    return id;
+  };
+
+  it('survives a response with the guild name intact', async () => {
+    const context = createTestContext();
+    const id = seedTimed(context);
+    const fake = createFakeButtonInteraction({ userId: 'u1', guildName: 'Bogenpirat' });
+
+    await handleRespond(
+      fake.interaction,
+      { action: 'respond', choice: 'in', pickupId: id },
+      context,
+    );
+
+    const url = calendarUrlIn(fake.editedWith());
+    expect(url).not.toBeNull();
+    expect(new URL(url ?? '').searchParams.get('text')).toBe('Gaming-Session @ Bogenpirat');
+  });
+
+  it('stays on the message after it is closed', async () => {
+    const context = createTestContext();
+    const id = seedTimed(context);
+    const fake = createFakeButtonInteraction({ userId: 'creator-1', guildName: 'Bogenpirat' });
+
+    await handleClose(fake.interaction, { action: 'close', pickupId: id }, context);
+
+    expect(calendarUrlIn(fake.editedWith())).not.toBeNull();
   });
 });

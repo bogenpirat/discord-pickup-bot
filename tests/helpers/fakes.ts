@@ -45,6 +45,7 @@ export interface FakeInteractionOptions {
   readonly manageGuild?: boolean;
   readonly guildId?: string | null;
   readonly customId?: string;
+  readonly guildName?: string;
   readonly replyFails?: boolean;
   readonly roleIds?: readonly string[];
   readonly powerUserIds?: readonly string[];
@@ -73,10 +74,13 @@ export const createFakeButtonInteraction = (
     return undefined;
   };
 
+  const guildId = options.guildId === undefined ? 'guild-1' : options.guildId;
+
   const interaction = {
     customId: options.customId ?? 'pickup:respond:in:1',
     locale: options.locale ?? 'de',
-    guildId: options.guildId === undefined ? 'guild-1' : options.guildId,
+    guildId,
+    guild: guildId === null ? null : { name: options.guildName ?? 'Test Guild' },
     user: { id: options.userId ?? 'user-1' },
     memberPermissions: permissions(options.manageGuild ?? false),
     get deferred() {
@@ -189,7 +193,10 @@ export const createFakeCommandInteraction = (
     user: { id: options.userId ?? 'user-1' },
     memberPermissions: permissions(options.manageGuild ?? false),
     member: guildId === null ? null : { roles: [...(options.roleIds ?? [])] },
-    guild: guildId === null ? null : { channels: { fetch: async () => channel } },
+    guild:
+      guildId === null
+        ? null
+        : { name: options.guildName ?? 'Test Guild', channels: { fetch: async () => channel } },
     inGuild: () => guildId !== null,
     get deferred() {
       return state.deferred;

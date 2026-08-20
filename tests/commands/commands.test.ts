@@ -481,6 +481,18 @@ describe('/pickup-config steam-remove', () => {
   });
 });
 
+/** Digs the calendar link button out of a rendered pickup payload. */
+const calendarUrlIn = (payload: unknown): string | null => {
+  const components = (payload as { components?: { toJSON: () => { components: unknown[] } }[] })
+    .components;
+  const buttons = (components ?? []).flatMap((row) => row.toJSON().components);
+  const link = buttons.find(
+    (button): button is { url: string } =>
+      typeof button === 'object' && button !== null && 'url' in button,
+  );
+  return link?.url ?? null;
+};
+
 describe('/valo', () => {
   const configured = () => {
     const context = createTestContext();
@@ -520,6 +532,41 @@ describe('/valo', () => {
     await valoCommand.execute(fake.interaction, context);
 
     expect(fake.messages().join(' ')).toContain('nicht schreiben');
+  });
+
+  it('rewrites the message so the calendar link can point at it', async () => {
+    const context = configured();
+    const fake = createFakeCommandInteraction({ strings: { info: 'Helldivers um halb 9' } });
+
+    await valoCommand.execute(fake.interaction, context);
+
+    const url = calendarUrlIn(fake.edited.at(-1));
+    expect(url).not.toBeNull();
+    expect(new URL(url ?? '').searchParams.get('details')).toBe(
+      'Organisiert über Discord: https://discord.com/channels/guild-1/channel-1/message-1',
+    );
+  });
+
+  it('leaves the message alone when no time was recognised', async () => {
+    const context = configured();
+    const fake = createFakeCommandInteraction({ strings: { info: 'brauchen noch 2 leute' } });
+
+    await valoCommand.execute(fake.interaction, context);
+
+    expect(fake.edited).toHaveLength(0);
+  });
+
+  it('keeps the pickup when the calendar rewrite fails', async () => {
+    const context = configured();
+    const fake = createFakeCommandInteraction({
+      strings: { info: 'Helldivers um halb 9' },
+      editFails: true,
+    });
+
+    await valoCommand.execute(fake.interaction, context);
+
+    expect(context.pickups.findByMessageId('message-1')).toBeDefined();
+    expect(fake.messages().join(' ')).toContain('Pickup gepostet');
   });
 
   it('posts with no info at all', async () => {
@@ -684,6 +731,31 @@ describe('/valo-time', () => {
     expect(fake.edited).toHaveLength(1);
     const payload = fake.edited[0] as { embeds: { data: { description: string } }[] };
     expect(payload.embeds[0]?.data.description).toContain('<t:');
+  });
+
+  it('adds the calendar link once a time is filled in afterwards', async () => {
+    const context = await posted('Helldivers');
+    const fake = createFakeCommandInteraction({ strings: { time: '20:30' } });
+
+    await valoTimeCommand.execute(fake.interaction, context);
+
+    const url = calendarUrlIn(fake.edited.at(-1));
+    expect(url).not.toBeNull();
+    const params = new URL(url ?? '').searchParams;
+    expect(params.get('text')).toBe('Gaming-Session @ Test Guild');
+    expect(params.get('dates')).toBe('20260727T183000Z/20260727T203000Z');
+    expect(params.get('details')).toBe(
+      'Organisiert über Discord: https://discord.com/channels/guild-1/channel-1/message-1',
+    );
+  });
+
+  it('drops the calendar link when the new time is unreadable', async () => {
+    const context = await posted('Helldivers 20:30');
+    const fake = createFakeCommandInteraction({ strings: { time: 'irgendwann halt' } });
+
+    await valoTimeCommand.execute(fake.interaction, context);
+
+    expect(calendarUrlIn(fake.edited.at(-1))).toBeNull();
   });
 
   it('keeps the note untouched while changing the time', async () => {

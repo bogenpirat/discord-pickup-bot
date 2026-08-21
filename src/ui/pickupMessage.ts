@@ -25,6 +25,9 @@ import { type AppLocale, DEFAULT_LOCALE, type Strings, stringsFor } from './stri
 const MAX_NAMES = 15;
 const FIELD_LIMIT = 1024;
 const BUTTON_URL_LIMIT = 512;
+/** How many code points to give back per attempt at fitting a URL in a button. */
+const SHORTEN_STEP = 10;
+const ELLIPSIS = '…';
 
 const CALENDAR_EMOJI = '📅';
 const ICAL_EMOJI = '📆';
@@ -112,23 +115,56 @@ const buildEmbed = (view: PickupView, strings: Strings): EmbedBuilder => {
   return embed;
 };
 
+/** Lengths to try, longest first, down to nothing. */
+const lengthsDownFrom = (total: number): number[] => {
+  const lengths: number[] = [];
+
+  for (let length = total; length > 0; length -= SHORTEN_STEP) {
+    lengths.push(length);
+  }
+  lengths.push(0);
+
+  return lengths;
+};
+
 /**
- * The Google Calendar link only exists once a discrete start time is known. The
- * guild name rides along in the event title, so it is shortened until the whole
- * URL fits the limit Discord puts on a link button — by code point, because
- * slicing a surrogate pair in half would break the encoding.
+ * Cuts by code point, because slicing a surrogate pair in half would break the
+ * encoding. Null for nothing left, so it drops out of the event entirely. The
+ * marker marks a cut as one — a shortened title reads as a name, so it gets
+ * none, while a shortened note has to admit that there is more to read.
+ */
+const cutTo = (points: readonly string[], length: number, marker = ''): string | null => {
+  if (length === 0) {
+    return null;
+  }
+
+  return length >= points.length ? points.join('') : `${points.slice(0, length).join('')}${marker}`;
+};
+
+/**
+ * The Google Calendar link only exists once a discrete start time is known.
+ * Both the note and the guild name ride along in the event, so they are
+ * shortened until the whole URL fits the limit Discord puts on a link button.
+ *
+ * The note gives way first: the permalink at the end of the description leads
+ * straight to the full text, while a truncated guild name is lost for good.
  */
 const buildGoogleUrl = (
   pickup: PickupRecord,
   guildName: string | null,
   strings: Strings,
 ): string | null => {
-  const name = guildName === null ? [] : [...guildName];
+  if (pickup.startsAt === null) {
+    return null;
+  }
 
-  for (let length = name.length; length >= 0; length -= 10) {
+  const name = guildName === null ? [] : [...guildName];
+  const note = pickup.note === null ? [] : [...pickup.note];
+
+  const attempt = (noteLength: number, nameLength: number): string | null => {
     const event = pickupCalendarEvent(
-      pickup,
-      length === 0 ? null : name.slice(0, length).join(''),
+      { ...pickup, note: cutTo(note, noteLength, ELLIPSIS) },
+      cutTo(name, nameLength),
       strings,
     );
 
@@ -138,7 +174,21 @@ const buildGoogleUrl = (
 
     const url = googleCalendarLink(event);
 
-    if (url.length <= BUTTON_URL_LIMIT) {
+    return url.length <= BUTTON_URL_LIMIT ? url : null;
+  };
+
+  for (const noteLength of lengthsDownFrom(note.length)) {
+    const url = attempt(noteLength, name.length);
+
+    if (url !== null) {
+      return url;
+    }
+  }
+
+  for (const nameLength of lengthsDownFrom(name.length)) {
+    const url = attempt(0, nameLength);
+
+    if (url !== null) {
       return url;
     }
   }

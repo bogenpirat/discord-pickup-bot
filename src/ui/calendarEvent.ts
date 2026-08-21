@@ -31,10 +31,16 @@ export const pickupCalendarEvent = (
 
   const messageUrl = pickupMessageUrl(pickup);
 
+  // The organiser's own words come first and the permalink last, so a calendar
+  // that truncates a long description cuts the boilerplate rather than the note.
+  const details = [pickup.note, messageUrl === null ? null : strings.calendarDetails(messageUrl)]
+    .filter((part): part is string => part !== null)
+    .join('\n\n');
+
   return {
     title: strings.calendarTitle(guildName),
     startsAt: pickup.startsAt,
     durationMinutes: CALENDAR_DURATION_MINUTES,
-    ...(messageUrl === null ? {} : { details: strings.calendarDetails(messageUrl) }),
+    ...(details === '' ? {} : { details }),
   };
 };

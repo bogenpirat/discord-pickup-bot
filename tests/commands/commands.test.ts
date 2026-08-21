@@ -543,7 +543,7 @@ describe('/valo', () => {
     const url = calendarUrlIn(fake.edited.at(-1));
     expect(url).not.toBeNull();
     expect(new URL(url ?? '').searchParams.get('details')).toBe(
-      'Organisiert über Discord: https://discord.com/channels/guild-1/channel-1/message-1',
+      'Helldivers um halb 9\n\nOrganisiert über Discord: https://discord.com/channels/guild-1/channel-1/message-1',
     );
   });
 
@@ -745,7 +745,7 @@ describe('/valo-time', () => {
     expect(params.get('text')).toBe('Gaming-Session @ Test Guild');
     expect(params.get('dates')).toBe('20260727T183000Z/20260727T203000Z');
     expect(params.get('details')).toBe(
-      'Organisiert über Discord: https://discord.com/channels/guild-1/channel-1/message-1',
+      'Helldivers\n\nOrganisiert über Discord: https://discord.com/channels/guild-1/channel-1/message-1',
     );
   });
 

@@ -470,7 +470,23 @@ describe('calendar buttons', () => {
       );
     });
 
-    it('omits the details while the message id is still unknown', () => {
+    it('opens the details with the note and closes them with the link', () => {
+      expect(
+        new URL(googleUrl({ startsAt, note: 'Helldivers 20:30' })).searchParams.get('details'),
+      ).toBe(
+        'Helldivers 20:30\n\nOrganisiert über Discord: https://discord.com/channels/guild-1/channel-1/message-1',
+      );
+    });
+
+    it('keeps the note in the details while the message id is still unknown', () => {
+      expect(
+        new URL(googleUrl({ startsAt, note: 'Helldivers', messageId: null })).searchParams.get(
+          'details',
+        ),
+      ).toBe('Helldivers');
+    });
+
+    it('omits the details when there is neither a note nor a message id', () => {
       expect(googleUrl({ startsAt, messageId: null })).not.toContain('details=');
     });
 
@@ -494,6 +510,19 @@ describe('calendar buttons', () => {
       expect(url).not.toBe('');
       expect(url.length).toBeLessThanOrEqual(512);
       expect(() => new URL(url)).not.toThrow();
+    });
+
+    // The note gives way before the title does, and the link it is cut for is
+    // the one that leads to the note in full.
+    it('shortens a long note rather than the event title', () => {
+      const guildName = 'B'.repeat(100);
+      const params = new URL(googleUrl({ startsAt, note: 'n'.repeat(200) }, { guildName }))
+        .searchParams;
+      const details = params.get('details') ?? '';
+
+      expect(params.get('text')).toBe(`Gaming-Session @ ${guildName}`);
+      expect(details).toMatch(/^n+…\n\nOrganisiert über Discord: https:\/\//u);
+      expect(details).not.toContain('n'.repeat(200));
     });
 
     it('shortens a long guild name without splitting a surrogate pair', () => {

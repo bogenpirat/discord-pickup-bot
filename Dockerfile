@@ -15,13 +15,17 @@ FROM node:26.5.0-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
+# Only /data needs to be writable by the app; /app stays root-owned and
+# world-readable. A recursive chown over node_modules would copy every file
+# into a fresh layer, costing ~20s of build time and duplicating the tree.
+RUN mkdir -p /data && chown node:node /data
+
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --from=build /app/dist ./dist
 COPY docker/healthcheck.mjs ./healthcheck.mjs
 
-RUN mkdir -p /data && chown -R node:node /data /app
 USER node
 
 # Documentation only; the actual port comes from HTTP_PORT at runtime.

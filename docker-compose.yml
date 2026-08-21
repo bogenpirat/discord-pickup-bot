@@ -8,6 +8,11 @@ services:
     init: true
     env_file:
       - .env
+    # Both sides read the same variable so changing HTTP_PORT in .env cannot
+    # desync them: the server would report itself listening while every button
+    # timed out. Harmless when PUBLIC_BASE_URL is blank and nothing listens.
+    ports:
+      - "${HTTP_PORT:-18080}:${HTTP_PORT:-18080}"
     environment:
       NODE_ENV: production
       DATABASE_PATH: /data/pickup.db

@@ -24,6 +24,9 @@ COPY docker/healthcheck.mjs ./healthcheck.mjs
 RUN mkdir -p /data && chown -R node:node /data /app
 USER node
 
+# Documentation only; the actual port comes from HTTP_PORT at runtime.
+EXPOSE 18080
+
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD ["node", "/app/healthcheck.mjs"]
 

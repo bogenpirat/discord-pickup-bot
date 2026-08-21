@@ -80,6 +80,7 @@ const execute = async (
         mentionRoleId: settings.mentionRoleId,
         emojis: settings.emojis,
         guildName: interaction.guild.name,
+        publicBaseUrl: context.publicBaseUrl,
       }),
     );
     context.pickups.attachMessage(pickupId, message.id);
@@ -97,6 +98,7 @@ const execute = async (
             mentionRoleId: settings.mentionRoleId,
             emojis: settings.emojis,
             guildName: interaction.guild.name,
+            publicBaseUrl: context.publicBaseUrl,
           }),
         )
         .catch((error: unknown) => {

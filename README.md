@@ -128,22 +128,62 @@ hunting for one inside a sentence. The note is left exactly as it was.
 
 ### Adding it to your calendar
 
-A pickup with a **discrete start time** carries an extra 📅 button — emoji only, no label —
-that opens Google Calendar with the event prefilled. The event is titled
-`Gaming-Session @ <server name>` (`Gaming session @ …` in English), starts at the pickup
-time, and runs two hours by default. Its details link back to the pickup message, so the
-calendar entry always points at the current tally.
+A pickup with a **discrete start time** grows a second row of buttons: **📅 GCal** and
+**📆 iCal**. Both describe the same event — titled `Gaming-Session @ <server name>`
+(`Gaming session @ …` in English), starting at the pickup time and running two hours by
+default, with a link back to the pickup message so the entry always points at the current
+tally.
 
-The button only appears when the time was actually recognised. A pickup without a time, or
-one whose time is only shown verbatim (`/valo-time irgendwann halt`), has no button — there
-would be nothing to put in the `dates` field. Filling the time in later with `/valo-time`
-adds the button to the existing message.
+- **GCal** opens Google Calendar with the event prefilled, entirely in the URL.
+- **iCal** downloads an `.ics` file for everything else — Apple Calendar, Outlook,
+  Thunderbird, a CalDAV server. It only appears when `PUBLIC_BASE_URL` is set (see below);
+  without it the row holds GCal alone.
 
-It stays clickable on a closed pickup: closing ends the signups, not the game.
+They live on their own row because Discord allows five buttons per row and the responses
+plus **Schließen** already fill one.
 
-Because the message link is part of the event, `/valo` posts the message and then rewrites it
-once Discord has handed out the message id. If that second write fails the pickup stands as
-posted, only without the button.
+Both stay clickable on a closed pickup: closing ends the signups, not the game.
+
+#### When the button appears
+
+The row only exists when the time was actually recognised. A pickup without a time, or one
+whose time is only shown verbatim (`/valo-time irgendwann halt`), has no calendar buttons —
+there would be nothing to put in a start field. Filling the time in later with `/valo-time`
+adds them to the existing message.
+
+Because the message link is part of the Google event, `/valo` posts the message and then
+rewrites it once Discord has handed out the message id. If that second write fails the
+pickup stands as posted, only without the GCal button. The iCal button does not need the
+message id, so it survives that failure.
+
+#### The `.ics` is generated live
+
+The file is not stored anywhere. Each download reads the pickup out of SQLite and builds
+the document on the spot, so moving the time with `/valo-time` changes what the endpoint
+serves without the Discord message being touched. It also means the endpoint keeps working
+across a bot restart, and even if the original message is deleted.
+
+Two things worth knowing:
+
+- **Re-importing may not update an existing entry.** A pickup carries no revision counter,
+  so the file has no `SEQUENCE`. Calendars that treat each downloaded file as fresh pick up
+  a changed time on re-import; ones that match on `UID` and compare revisions may keep the
+  original. Deleting the old entry first always works.
+- **On mobile**, Discord opens link buttons in an in-app browser. The response is marked as
+  a download, which hands off to the system calendar on iOS and Android, but a browser with
+  downloads locked down may need the link opened externally instead.
+
+#### Serving the file
+
+The `.ics` comes from a small web server the bot runs itself, at
+`<PUBLIC_BASE_URL>/pickup/calendar/<id>.ics`. It is **off unless `PUBLIC_BASE_URL` is set**,
+and serves nothing else.
+
+The endpoint is **unauthenticated**, and pickup ids are sequential, so anyone who can reach
+the port can walk through them. What they would find is the event title, its start time and
+a link to the message — all of it already visible in the channel the pickup was posted to.
+Even so, keep the port on your own network or behind a reverse proxy rather than open to
+the internet.
 
 ### Responding
 
@@ -272,7 +312,23 @@ DISCORD_TOKEN=the token from step 3
 DISCORD_APP_ID=the id from step 2
 DISCORD_DEV_GUILD_ID=the id from step 8   # optional; blank = register globally
 POWER_USER_IDS=                           # optional; see below
+PUBLIC_BASE_URL=                          # optional; blank = no web server, no iCal button
+HTTP_PORT=18080                           # only used when PUBLIC_BASE_URL is set
 ```
+
+`PUBLIC_BASE_URL` is the address the **iCal** button points at, so it has to be reachable
+from the devices your members use — a LAN address or a hostname, not `localhost`. Include
+the port unless a reverse proxy is fronting it:
+
+```ini
+PUBLIC_BASE_URL=http://pickup.example.net:18080
+PUBLIC_BASE_URL=https://pickup.example.net     # behind a proxy on 443
+```
+
+The scheme is required; `pickup.example.net:18080` on its own is rejected at startup. Leave
+the value blank and the bot never opens a port, exactly as it behaved before the feature
+existed. See [Adding it to your calendar](#adding-it-to-your-calendar) for what the endpoint
+exposes.
 
 `POWER_USER_IDS` lists user IDs that may always use `/pickup-config`, regardless of their
 server permissions — useful so you can configure the bot without holding Manage Server.
@@ -349,6 +405,11 @@ blank registers globally, which can take up to an hour to propagate.
 The SQLite file lives on the `pickup-data` volume at `/data/pickup.db`. The container runs
 as the non-root `node` user and reports unhealthy if the gateway connection goes stale.
 
+`docker-compose.yml` publishes `${HTTP_PORT:-18080}` on both sides of the mapping, so
+changing `HTTP_PORT` in `.env` moves the container port and the host port together. Nothing
+listens on it unless `PUBLIC_BASE_URL` is set. The health check is unrelated to the web
+server — it probes a heartbeat file, not the port.
+
 ## Local development
 
 Requires Node 26+ (for `node:sqlite` and `Temporal`, both used without any dependency).
@@ -377,6 +438,7 @@ src/domain/     pure logic: time parsing, calendar links, response transitions (
 src/db/         schema, migrations, repositories
 src/ui/         renders domain values into Discord messages, de/en strings
 src/discord/    client, custom ids, command and button dispatch
+src/http/       the bot's own web server: socket, route table, one route per file
 src/commands/   one file per slash command
 src/buttons/    one file per button action
 src/app/        composition: context and registries

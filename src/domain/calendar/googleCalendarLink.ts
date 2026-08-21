@@ -1,3 +1,5 @@
+import { utcStamp } from './utcStamp.ts';
+
 const BASE_URL = 'https://calendar.google.com/calendar/render';
 
 const MILLIS_PER_MINUTE = 60_000;
@@ -10,11 +12,9 @@ export interface CalendarEvent {
   readonly details?: string;
 }
 
-/** `20260822T190000Z`, the shape Google expects in the `dates` parameter. */
-const formatUtc = (epochMillis: number): string =>
-  Temporal.Instant.fromEpochMilliseconds(epochMillis)
-    .toString({ smallestUnit: 'second' })
-    .replace(/[-:]/g, '');
+/** Epoch milliseconds for the end of an event, for want of an end time on the record. */
+export const endOf = (event: CalendarEvent): number =>
+  event.startsAt + event.durationMinutes * MILLIS_PER_MINUTE;
 
 // Google's own examples spell spaces as `+` rather than `%20`, and both sides of
 // the `dates` range stay readable because the separator is left alone.
@@ -25,11 +25,10 @@ const encode = (value: string): string => encodeURIComponent(value).replace(/%20
  * callers hand in finished text and get a URL back.
  */
 export const googleCalendarLink = (event: CalendarEvent): string => {
-  const endsAt = event.startsAt + event.durationMinutes * MILLIS_PER_MINUTE;
   const parts = [
     'action=TEMPLATE',
     `text=${encode(event.title)}`,
-    `dates=${formatUtc(event.startsAt)}/${formatUtc(endsAt)}`,
+    `dates=${utcStamp(event.startsAt)}/${utcStamp(endOf(event))}`,
   ];
 
   if (event.details !== undefined) {

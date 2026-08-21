@@ -27,6 +27,8 @@ export interface AppContext {
   readonly mutex: KeyedMutex;
   readonly logger: Logger;
   readonly powerUserIds: readonly string[];
+  /** Public origin of the bot's HTTP server, or null when it is not configured. */
+  readonly publicBaseUrl: string | null;
   now(): Temporal.Instant;
 }
 
@@ -34,6 +36,7 @@ export const createAppContext = (
   db: DatabaseSync,
   logger: Logger,
   powerUserIds: readonly string[] = [],
+  publicBaseUrl: string | null = null,
 ): AppContext => ({
   db,
   settings: createGuildSettingsRepository(db),
@@ -43,5 +46,6 @@ export const createAppContext = (
   mutex: createKeyedMutex(),
   logger,
   powerUserIds,
+  publicBaseUrl,
   now: () => Temporal.Now.instant(),
 });

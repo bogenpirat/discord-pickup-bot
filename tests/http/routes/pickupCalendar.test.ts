@@ -82,6 +82,36 @@ describe('serving a pickup', () => {
     );
   });
 
+  it('opens the description with the note and closes it with the link', () => {
+    const id = pickups.create({
+      guildId: 'guild-1',
+      channelId: 'channel-1',
+      creatorId: 'creator-1',
+      startsAt: STARTS_AT,
+      startsAtText: null,
+      note: 'Helldivers, 20:30',
+    });
+    pickups.attachMessage(id, 'message-1');
+
+    // Newlines are a literal `\n` and the comma is escaped, per RFC 5545 §3.3.11.
+    expect(propertyOf(get(`/pickup/calendar/${id}.ics`).body, 'DESCRIPTION')).toBe(
+      'Helldivers\\, 20:30\\n\\nOrganisiert über Discord: https://discord.com/channels/guild-1/channel-1/message-1',
+    );
+  });
+
+  it('describes a pickup with a note but no message yet by the note alone', () => {
+    const id = pickups.create({
+      guildId: 'guild-1',
+      channelId: 'channel-1',
+      creatorId: 'creator-1',
+      startsAt: STARTS_AT,
+      startsAtText: null,
+      note: 'Helldivers',
+    });
+
+    expect(propertyOf(get(`/pickup/calendar/${id}.ics`).body, 'DESCRIPTION')).toBe('Helldivers');
+  });
+
   it('keys the uid on the pickup and the deployment host', () => {
     const id = seed();
     expect(propertyOf(get(`/pickup/calendar/${id}.ics`).body, 'UID')).toBe(

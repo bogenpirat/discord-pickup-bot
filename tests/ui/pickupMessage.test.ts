@@ -347,134 +347,199 @@ describe('note', () => {
   });
 });
 
-describe('calendar button', () => {
+describe('calendar buttons', () => {
   const startsAt = Date.UTC(2026, 7, 22, 19, 0);
+  const BASE_URL = 'http://pickup.example.net:18080';
 
-  const view = (overrides: Partial<PickupRecord>, guildName?: string | null, locale?: AppLocale) =>
+  interface ViewOptions {
+    readonly guildName?: string | null;
+    readonly locale?: AppLocale;
+    readonly publicBaseUrl?: string | null;
+  }
+
+  const view = (overrides: Partial<PickupRecord>, options: ViewOptions = {}) =>
     render({
       pickup: pickup(overrides),
       responses: [],
       mentionRoleId: null,
-      guildName: guildName === undefined ? 'Test Guild' : guildName,
-      ...(locale === undefined ? {} : { locale }),
+      guildName: options.guildName === undefined ? 'Test Guild' : options.guildName,
+      publicBaseUrl: options.publicBaseUrl === undefined ? BASE_URL : options.publicBaseUrl,
+      ...(options.locale === undefined ? {} : { locale: options.locale }),
     });
 
-  const calendarButton = (
+  /** The calendar links live on their own row, below the responses and close. */
+  const calendarRow = (overrides: Partial<PickupRecord> = {}, options: ViewOptions = {}) =>
+    view(overrides, options).components[1]?.toJSON().components ?? [];
+
+  const buttonLabelled = (
+    label: string,
     overrides: Partial<PickupRecord> = {},
-    guildName?: string | null,
-    locale?: AppLocale,
-  ) =>
-    (view(overrides, guildName, locale).components[0]?.toJSON().components ?? []).find(
-      (component) => 'url' in component && component.url !== undefined,
-    );
+    options: ViewOptions = {},
+  ) => calendarRow(overrides, options).find((c) => 'label' in c && c.label === label);
 
-  const calendarUrl = (
-    overrides: Partial<PickupRecord> = {},
-    guildName?: string | null,
-    locale?: AppLocale,
-  ) => {
-    const button = calendarButton(overrides, guildName, locale);
-    return button !== undefined && 'url' in button ? (button.url ?? '') : '';
-  };
+  const urlOf = (button: ReturnType<typeof buttonLabelled>) =>
+    button !== undefined && 'url' in button ? (button.url ?? '') : '';
 
-  it('stays hidden when no discrete time was recognised', () => {
-    expect(calendarButton()).toBeUndefined();
-  });
+  const googleUrl = (overrides: Partial<PickupRecord> = {}, options: ViewOptions = {}) =>
+    urlOf(buttonLabelled('GCal', overrides, options));
 
-  it('stays hidden when the time was only understood as text', () => {
-    expect(calendarButton({ startsAtText: 'kurz nach dem Abendessen' })).toBeUndefined();
-  });
+  const icalUrl = (overrides: Partial<PickupRecord> = {}, options: ViewOptions = {}) =>
+    urlOf(buttonLabelled('iCal', overrides, options));
 
-  it('appears once a discrete time is known', () => {
-    const button = calendarButton({ startsAt });
-    expect(button).toBeDefined();
-    expect(button !== undefined && 'custom_id' in button ? button.custom_id : undefined).toBe(
-      undefined,
-    );
-  });
+  describe('layout', () => {
+    it('keeps the responses and close together on the first row', () => {
+      const labels = view({ startsAt })
+        .components[0]?.toJSON()
+        .components.map((component) => ('label' in component ? component.label : undefined));
 
-  it('carries the calendar emoji and no label', () => {
-    const button = calendarButton({ startsAt });
-    expect(button !== undefined && 'emoji' in button ? button.emoji : undefined).toEqual({
-      name: '📅',
-      animated: false,
+      expect(labels).toEqual(['Dabei · 0', 'Später · 0', 'Raus · 0', 'Schließen']);
     });
-    expect(button !== undefined && 'label' in button ? button.label : undefined).toBeUndefined();
+
+    it('puts both calendar links on a second row', () => {
+      expect(calendarRow({ startsAt }).map((c) => ('label' in c ? c.label : undefined))).toEqual([
+        'GCal',
+        'iCal',
+      ]);
+    });
+
+    // Discord allows five buttons per row, so the split is not cosmetic.
+    it('never puts more than five buttons in a row', () => {
+      for (const row of view({ startsAt }).components) {
+        expect(row.toJSON().components.length).toBeLessThanOrEqual(5);
+      }
+    });
+
+    it('drops the second row entirely when no discrete time was recognised', () => {
+      expect(view({}).components).toHaveLength(1);
+    });
+
+    it('drops the second row when the time was only understood as text', () => {
+      expect(view({ startsAtText: 'kurz nach dem Abendessen' }).components).toHaveLength(1);
+    });
+
+    it('carries no custom id on either link button', () => {
+      for (const component of calendarRow({ startsAt })) {
+        expect('custom_id' in component ? component.custom_id : undefined).toBeUndefined();
+      }
+    });
+
+    it('stays clickable on a closed pickup', () => {
+      const row = calendarRow({ startsAt, status: 'closed', closedAt: 5 });
+
+      expect(row).toHaveLength(2);
+      for (const component of row) {
+        expect('disabled' in component ? component.disabled : undefined).not.toBe(true);
+      }
+    });
   });
 
-  it('sits between the responses and the close button', () => {
-    const labels = view({ startsAt })
-      .components[0]?.toJSON()
-      .components.map((component) => ('label' in component ? component.label : undefined));
+  describe('google calendar link', () => {
+    it('carries the calendar emoji and a GCal label', () => {
+      const button = buttonLabelled('GCal', { startsAt });
+      expect(button !== undefined && 'emoji' in button ? button.emoji : undefined).toEqual({
+        name: '📅',
+        animated: false,
+      });
+    });
 
-    expect(labels).toEqual(['Dabei · 0', 'Später · 0', 'Raus · 0', undefined, 'Schließen']);
+    it('spans the start time and two hours', () => {
+      expect(googleUrl({ startsAt })).toContain('dates=20260822T190000Z/20260822T210000Z');
+    });
+
+    it('names the guild in the event title', () => {
+      expect(
+        new URL(googleUrl({ startsAt }, { guildName: 'Bogenpirat' })).searchParams.get('text'),
+      ).toBe('Gaming-Session @ Bogenpirat');
+    });
+
+    it('leaves the note out of the event title', () => {
+      expect(
+        new URL(googleUrl({ startsAt, note: 'Helldivers 20:30' })).searchParams.get('text'),
+      ).toBe('Gaming-Session @ Test Guild');
+    });
+
+    it('falls back to a bare title when the guild is not in cache', () => {
+      expect(new URL(googleUrl({ startsAt }, { guildName: null })).searchParams.get('text')).toBe(
+        'Gaming-Session',
+      );
+    });
+
+    it('links back to the pickup message in the details', () => {
+      expect(new URL(googleUrl({ startsAt })).searchParams.get('details')).toBe(
+        'Organisiert über Discord: https://discord.com/channels/guild-1/channel-1/message-1',
+      );
+    });
+
+    it('omits the details while the message id is still unknown', () => {
+      expect(googleUrl({ startsAt, messageId: null })).not.toContain('details=');
+    });
+
+    it('translates the event text', () => {
+      const url = new URL(googleUrl({ startsAt }, { guildName: 'Bogenpirat', locale: 'en' }));
+      expect(url.searchParams.get('text')).toBe('Gaming session @ Bogenpirat');
+      expect(url.searchParams.get('details')).toBe(
+        'Organised via Discord: https://discord.com/channels/guild-1/channel-1/message-1',
+      );
+    });
+
+    // Discord caps a guild name at 100 characters, which still percent-encodes
+    // past the 512 a link button allows.
+    it.each([
+      ['a plain name', 'Bogenpirat'],
+      ['a maximum length name', 'x'.repeat(100)],
+      ['a name of emoji', '🎮'.repeat(50)],
+      ['a name of umlauts', 'ä'.repeat(100)],
+    ])('keeps the url inside the button limit with %s', (_label, guildName) => {
+      const url = googleUrl({ startsAt, note: 'x'.repeat(200) }, { guildName });
+      expect(url).not.toBe('');
+      expect(url.length).toBeLessThanOrEqual(512);
+      expect(() => new URL(url)).not.toThrow();
+    });
+
+    it('shortens a long guild name without splitting a surrogate pair', () => {
+      const text = new URL(
+        googleUrl({ startsAt }, { guildName: '🎮'.repeat(50) }),
+      ).searchParams.get('text');
+      expect(text).toMatch(/^Gaming-Session @ 🎮+$/u);
+    });
   });
 
-  it('spans the start time and two hours', () => {
-    expect(calendarUrl({ startsAt })).toContain('dates=20260822T190000Z/20260822T210000Z');
-  });
+  describe('ical link', () => {
+    it('carries its own emoji and an iCal label', () => {
+      const button = buttonLabelled('iCal', { startsAt });
+      expect(button !== undefined && 'emoji' in button ? button.emoji : undefined).toEqual({
+        name: '📆',
+        animated: false,
+      });
+    });
 
-  it('names the guild in the event title', () => {
-    expect(new URL(calendarUrl({ startsAt }, 'Bogenpirat')).searchParams.get('text')).toBe(
-      'Gaming-Session @ Bogenpirat',
-    );
-  });
+    it('points at this bot under the configured base url', () => {
+      expect(icalUrl({ startsAt })).toBe(`${BASE_URL}/pickup/calendar/12.ics?lang=de`);
+    });
 
-  it('leaves the note out of the event title', () => {
-    expect(
-      new URL(calendarUrl({ startsAt, note: 'Helldivers 20:30' })).searchParams.get('text'),
-    ).toBe('Gaming-Session @ Test Guild');
-  });
+    it('carries the rendered locale so both buttons agree on the language', () => {
+      expect(icalUrl({ startsAt }, { locale: 'en' })).toBe(
+        `${BASE_URL}/pickup/calendar/12.ics?lang=en`,
+      );
+    });
 
-  it('falls back to a bare title when the guild is not in cache', () => {
-    expect(new URL(calendarUrl({ startsAt }, null)).searchParams.get('text')).toBe(
-      'Gaming-Session',
-    );
-  });
+    // Unlike the Google link, nothing about the event is baked into the URL —
+    // the server reads the pickup afresh on every request.
+    it('does not change when the event details do', () => {
+      expect(icalUrl({ startsAt, note: 'ranked', messageId: null })).toBe(
+        icalUrl({ startsAt, note: 'casual' }),
+      );
+    });
 
-  it('links back to the pickup message in the details', () => {
-    const url = new URL(calendarUrl({ startsAt }));
-    expect(url.searchParams.get('details')).toBe(
-      'Organisiert über Discord: https://discord.com/channels/guild-1/channel-1/message-1',
-    );
-  });
+    it('stays absent when no http server is configured, leaving GCal alone', () => {
+      const row = calendarRow({ startsAt }, { publicBaseUrl: null });
 
-  it('omits the details while the message id is still unknown', () => {
-    expect(calendarUrl({ startsAt, messageId: null })).not.toContain('details=');
-  });
+      expect(row).toHaveLength(1);
+      expect(row.map((c) => ('label' in c ? c.label : undefined))).toEqual(['GCal']);
+    });
 
-  it('translates the event text', () => {
-    const url = new URL(calendarUrl({ startsAt }, 'Bogenpirat', 'en'));
-    expect(url.searchParams.get('text')).toBe('Gaming session @ Bogenpirat');
-    expect(url.searchParams.get('details')).toBe(
-      'Organised via Discord: https://discord.com/channels/guild-1/channel-1/message-1',
-    );
-  });
-
-  it('stays clickable on a closed pickup', () => {
-    const button = calendarButton({ startsAt, status: 'closed', closedAt: 5 });
-    expect(button).toBeDefined();
-    expect(button !== undefined && 'disabled' in button ? button.disabled : undefined).not.toBe(
-      true,
-    );
-  });
-
-  // Discord caps a guild name at 100 characters, which still percent-encodes
-  // past the 512 a link button allows.
-  it.each([
-    ['a plain name', 'Bogenpirat'],
-    ['a maximum length name', 'x'.repeat(100)],
-    ['a name of emoji', '🎮'.repeat(50)],
-    ['a name of umlauts', 'ä'.repeat(100)],
-  ])('keeps the url inside the button limit with %s', (_label, guildName) => {
-    const url = calendarUrl({ startsAt, note: 'x'.repeat(200) }, guildName);
-    expect(url).not.toBe('');
-    expect(url.length).toBeLessThanOrEqual(512);
-    expect(() => new URL(url)).not.toThrow();
-  });
-
-  it('shortens a long guild name without splitting a surrogate pair', () => {
-    const text = new URL(calendarUrl({ startsAt }, '🎮'.repeat(50))).searchParams.get('text');
-    expect(text).toMatch(/^Gaming-Session @ 🎮+$/u);
+    it('appears before the message id is known, unlike the google link', () => {
+      expect(icalUrl({ startsAt, messageId: null })).not.toBe('');
+    });
   });
 });

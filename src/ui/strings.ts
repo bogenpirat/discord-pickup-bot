@@ -14,6 +14,8 @@ export interface Strings {
   readonly closeButton: string;
   readonly calendarTitle: (guildName: string | null) => string;
   readonly calendarDetails: (messageUrl: string) => string;
+  readonly calendarGoogleButton: string;
+  readonly calendarIcalButton: string;
   readonly title: string;
   readonly noneYet: string;
   readonly moreNames: (count: number) => string;
@@ -78,6 +80,8 @@ const de: Strings = {
   calendarTitle: (guildName) =>
     guildName === null ? 'Gaming-Session' : `Gaming-Session @ ${guildName}`,
   calendarDetails: (messageUrl) => `Organisiert über Discord: ${messageUrl}`,
+  calendarGoogleButton: 'GCal',
+  calendarIcalButton: 'iCal',
   title: 'Pickup',
   noneYet: '—',
   moreNames: (count) => `… +${count} weitere`,
@@ -137,6 +141,8 @@ const en: Strings = {
   calendarTitle: (guildName) =>
     guildName === null ? 'Gaming session' : `Gaming session @ ${guildName}`,
   calendarDetails: (messageUrl) => `Organised via Discord: ${messageUrl}`,
+  calendarGoogleButton: 'GCal',
+  calendarIcalButton: 'iCal',
   title: 'Pickup',
   noneYet: '—',
   moreNames: (count) => `… +${count} more`,

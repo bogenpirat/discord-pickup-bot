@@ -70,3 +70,64 @@ describe('loadEnv', () => {
     expect(() => loadEnv(source)).toThrow(/Invalid environment configuration/);
   });
 });
+
+describe('http server settings', () => {
+  it('leaves the server off by default', () => {
+    const env = loadEnv(minimal);
+
+    expect(env.PUBLIC_BASE_URL).toBeUndefined();
+    expect(env.HTTP_PORT).toBe(18080);
+  });
+
+  // withoutBlanks strips empty values, so an untouched key in .env means "off".
+  it('treats a blank base url as absent', () => {
+    expect(loadEnv({ ...minimal, PUBLIC_BASE_URL: '' }).PUBLIC_BASE_URL).toBeUndefined();
+  });
+
+  it('keeps a configured base url', () => {
+    expect(
+      loadEnv({ ...minimal, PUBLIC_BASE_URL: 'http://pickup.example.net:18080' }).PUBLIC_BASE_URL,
+    ).toBe('http://pickup.example.net:18080');
+  });
+
+  it('accepts an https origin behind a proxy', () => {
+    expect(
+      loadEnv({ ...minimal, PUBLIC_BASE_URL: 'https://pickup.example.net' }).PUBLIC_BASE_URL,
+    ).toBe('https://pickup.example.net');
+  });
+
+  // Otherwise the button url would come out with a doubled slash.
+  it.each([
+    ['http://host:18080/', 'http://host:18080'],
+    ['http://host:18080///', 'http://host:18080'],
+    ['http://host:18080', 'http://host:18080'],
+  ])('trims trailing slashes off %o', (value, expected) => {
+    expect(loadEnv({ ...minimal, PUBLIC_BASE_URL: value }).PUBLIC_BASE_URL).toBe(expected);
+  });
+
+  it.each(['not-a-url', 'pickup.example.net:18080', '18080'])(
+    'rejects %o as a base url',
+    (value) => {
+      expect(() => loadEnv({ ...minimal, PUBLIC_BASE_URL: value })).toThrow(
+        /Invalid environment configuration/,
+      );
+    },
+  );
+
+  it('reads the port from a string, as the environment always supplies it', () => {
+    expect(loadEnv({ ...minimal, HTTP_PORT: '19090' }).HTTP_PORT).toBe(19090);
+  });
+
+  it.each(['80', '8080', '9999', '65536', '0', '-1', 'abc', '18080.5'])(
+    'rejects %o as a port',
+    (value) => {
+      expect(() => loadEnv({ ...minimal, HTTP_PORT: value })).toThrow(
+        /Invalid environment configuration/,
+      );
+    },
+  );
+
+  it.each(['10000', '65535'])('accepts %o at the edge of the range', (value) => {
+    expect(loadEnv({ ...minimal, HTTP_PORT: value }).HTTP_PORT).toBe(Number(value));
+  });
+});

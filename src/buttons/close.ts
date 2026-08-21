@@ -44,6 +44,7 @@ export const handleClose = async (
         mentionRoleId: settings.mentionRoleId,
         emojis: settings.emojis,
         guildName: interaction.guild?.name ?? null,
+        publicBaseUrl: context.publicBaseUrl,
       }),
     );
   });

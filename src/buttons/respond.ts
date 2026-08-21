@@ -31,6 +31,7 @@ export const handleRespond = async (
           mentionRoleId: settings.mentionRoleId,
           emojis: settings.emojis,
           guildName: interaction.guild?.name ?? null,
+          publicBaseUrl: context.publicBaseUrl,
         }),
       );
       await replyEphemeral(interaction, strings.pickupAlreadyClosed);
@@ -56,6 +57,7 @@ export const handleRespond = async (
         mentionRoleId: settings.mentionRoleId,
         emojis: settings.emojis,
         guildName: interaction.guild?.name ?? null,
+        publicBaseUrl: context.publicBaseUrl,
       }),
     );
   });

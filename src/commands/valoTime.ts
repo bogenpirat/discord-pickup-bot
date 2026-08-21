@@ -115,6 +115,7 @@ const execute = async (
           mentionRoleId: settings.mentionRoleId,
           emojis: settings.emojis,
           guildName,
+          publicBaseUrl: context.publicBaseUrl,
         }),
       );
     } catch (error) {

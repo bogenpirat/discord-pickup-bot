@@ -3,7 +3,6 @@ import {
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
-  messageLink,
   roleMention,
   TimestampStyles,
   time,
@@ -20,15 +19,15 @@ import {
   type PickupChoice,
 } from '../domain/pickupChoice.ts';
 import { groupByChoice, type ResponseSet, tally } from '../domain/pickupState.ts';
+import { pickupCalendarEvent } from './calendarEvent.ts';
 import { type AppLocale, DEFAULT_LOCALE, type Strings, stringsFor } from './strings.ts';
 
 const MAX_NAMES = 15;
 const FIELD_LIMIT = 1024;
 const BUTTON_URL_LIMIT = 512;
 
-/** How long a pickup is assumed to run, for want of an end time on the record. */
-const CALENDAR_DURATION_MINUTES = 120;
 const CALENDAR_EMOJI = '📅';
+const ICAL_EMOJI = '📆';
 
 const BUTTON_STYLES: Readonly<Record<PickupChoice, ButtonStyle>> = {
   in: ButtonStyle.Success,
@@ -42,6 +41,8 @@ export interface PickupView {
   readonly mentionRoleId: string | null;
   /** Names the calendar event. Absent when the guild is not in cache. */
   readonly guildName?: string | null;
+  /** Public origin of the bot's HTTP server. Absent when it is not configured. */
+  readonly publicBaseUrl?: string | null;
   readonly emojis?: ChoiceEmojis;
   readonly locale?: AppLocale;
 }
@@ -112,34 +113,30 @@ const buildEmbed = (view: PickupView, strings: Strings): EmbedBuilder => {
 };
 
 /**
- * The calendar link only exists once a discrete start time is known. The guild
- * name rides along in the event title, so it is shortened until the whole URL
- * fits the limit Discord puts on a link button — by code point, because slicing
- * a surrogate pair in half would break the encoding.
+ * The Google Calendar link only exists once a discrete start time is known. The
+ * guild name rides along in the event title, so it is shortened until the whole
+ * URL fits the limit Discord puts on a link button — by code point, because
+ * slicing a surrogate pair in half would break the encoding.
  */
-const buildCalendarUrl = (
+const buildGoogleUrl = (
   pickup: PickupRecord,
   guildName: string | null,
   strings: Strings,
 ): string | null => {
-  if (pickup.startsAt === null) {
-    return null;
-  }
-
-  const details =
-    pickup.messageId === null
-      ? undefined
-      : strings.calendarDetails(messageLink(pickup.channelId, pickup.messageId, pickup.guildId));
-
   const name = guildName === null ? [] : [...guildName];
 
   for (let length = name.length; length >= 0; length -= 10) {
-    const url = googleCalendarLink({
-      title: strings.calendarTitle(length === 0 ? null : name.slice(0, length).join('')),
-      startsAt: pickup.startsAt,
-      durationMinutes: CALENDAR_DURATION_MINUTES,
-      ...(details === undefined ? {} : { details }),
-    });
+    const event = pickupCalendarEvent(
+      pickup,
+      length === 0 ? null : name.slice(0, length).join(''),
+      strings,
+    );
+
+    if (event === null) {
+      return null;
+    }
+
+    const url = googleCalendarLink(event);
 
     if (url.length <= BUTTON_URL_LIMIT) {
       return url;
@@ -149,13 +146,30 @@ const buildCalendarUrl = (
   return null;
 };
 
-const buildComponents = (view: PickupView, strings: Strings): ActionRowBuilder<ButtonBuilder>[] => {
+/**
+ * Points at this bot's own HTTP server, which renders the `.ics` per request —
+ * so unlike the Google link, nothing about the event is baked into the URL and
+ * a time changed later needs no re-render. Absent when no server is configured.
+ */
+const buildIcalUrl = (
+  pickup: PickupRecord,
+  publicBaseUrl: string | null,
+  locale: AppLocale,
+): string | null =>
+  pickup.startsAt === null || publicBaseUrl === null
+    ? null
+    : `${publicBaseUrl}/pickup/calendar/${pickup.id}.ics?lang=${locale}`;
+
+const buildComponents = (
+  view: PickupView,
+  strings: Strings,
+  locale: AppLocale,
+): ActionRowBuilder<ButtonBuilder>[] => {
   const counts = tally(view.responses);
   const disabled = view.pickup.status === 'closed';
   const emojis = view.emojis ?? NO_CHOICE_EMOJIS;
-  const calendarUrl = buildCalendarUrl(view.pickup, view.guildName ?? null, strings);
 
-  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  const actions = new ActionRowBuilder<ButtonBuilder>().addComponents(
     ...PICKUP_CHOICES.map((choice) =>
       new ButtonBuilder()
         .setCustomId(encodeRespond(choice, view.pickup.id))
@@ -164,17 +178,6 @@ const buildComponents = (view: PickupView, strings: Strings): ActionRowBuilder<B
         .setEmoji(emojiFor(choice, emojis))
         .setDisabled(disabled),
     ),
-  );
-
-  // A link button opens Google Calendar directly, so it stays usable even on a
-  // closed pickup — the game itself is still happening.
-  if (calendarUrl !== null) {
-    row.addComponents(
-      new ButtonBuilder().setStyle(ButtonStyle.Link).setEmoji(CALENDAR_EMOJI).setURL(calendarUrl),
-    );
-  }
-
-  row.addComponents(
     new ButtonBuilder()
       .setCustomId(encodeClose(view.pickup.id))
       .setLabel(strings.closeButton)
@@ -182,17 +185,50 @@ const buildComponents = (view: PickupView, strings: Strings): ActionRowBuilder<B
       .setDisabled(disabled),
   );
 
-  return [row];
+  // Link buttons open the calendar directly, so they stay usable even on a
+  // closed pickup — the game itself is still happening. They live on their own
+  // row because the four buttons above already fill Discord's limit of five.
+  const googleUrl = buildGoogleUrl(view.pickup, view.guildName ?? null, strings);
+  const icalUrl = buildIcalUrl(view.pickup, view.publicBaseUrl ?? null, locale);
+
+  if (googleUrl === null && icalUrl === null) {
+    return [actions];
+  }
+
+  const calendar = new ActionRowBuilder<ButtonBuilder>();
+
+  if (googleUrl !== null) {
+    calendar.addComponents(
+      new ButtonBuilder()
+        .setStyle(ButtonStyle.Link)
+        .setEmoji(CALENDAR_EMOJI)
+        .setLabel(strings.calendarGoogleButton)
+        .setURL(googleUrl),
+    );
+  }
+
+  if (icalUrl !== null) {
+    calendar.addComponents(
+      new ButtonBuilder()
+        .setStyle(ButtonStyle.Link)
+        .setEmoji(ICAL_EMOJI)
+        .setLabel(strings.calendarIcalButton)
+        .setURL(icalUrl),
+    );
+  }
+
+  return [actions, calendar];
 };
 
 export const renderPickupMessage = (view: PickupView): PickupMessagePayload => {
-  const strings = stringsFor(view.locale ?? DEFAULT_LOCALE);
+  const locale = view.locale ?? DEFAULT_LOCALE;
+  const strings = stringsFor(locale);
   const mentionRoleId = view.pickup.status === 'closed' ? null : view.mentionRoleId;
 
   return {
     content: mentionRoleId === null ? '' : roleMention(mentionRoleId),
     embeds: [buildEmbed(view, strings)],
-    components: buildComponents(view, strings),
+    components: buildComponents(view, strings, locale),
     allowedMentions: { parse: [], roles: mentionRoleId === null ? [] : [mentionRoleId] },
   };
 };

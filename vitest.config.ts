@@ -15,6 +15,7 @@ export default defineConfig({
         'src/ui/**': { lines: 90, branches: 90, functions: 90, statements: 90 },
         'src/lib/**': { lines: 90, branches: 90, functions: 90, statements: 90 },
         'src/discord/**': { lines: 90, branches: 90, functions: 90, statements: 90 },
+        'src/http/**': { lines: 90, branches: 90, functions: 90, statements: 90 },
         'src/commands/**': { lines: 80, branches: 80, functions: 80, statements: 80 },
         'src/buttons/**': { lines: 80, branches: 80, functions: 80, statements: 80 },
         'src/config/**': { lines: 90, branches: 90, functions: 90, statements: 90 },

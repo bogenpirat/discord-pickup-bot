@@ -1,10 +1,15 @@
 import {
   type ChatInputCommandInteraction,
+  type Guild,
+  type GuildBasedChannel,
   InteractionContextType,
   MessageFlags,
+  type SendableChannels,
   SlashCommandBuilder,
+  type TextBasedChannel,
 } from 'discord.js';
 import type { AppContext } from '../app/context.ts';
+import type { GuildSettings } from '../db/repositories/guildSettingsRepository.ts';
 import { replyEphemeral } from '../discord/reply.ts';
 import type { SlashCommand } from '../discord/types.ts';
 import { extractStartTime } from '../domain/time/extract.ts';
@@ -27,6 +32,59 @@ const definition = new SlashCommandBuilder()
       .setRequired(false),
   );
 
+/**
+ * Where a pickup ended up, and whether that was the caller's own channel. The
+ * two failures are kept apart because they need different advice: one asks an
+ * admin to set a fallback, the other to fix permissions.
+ */
+type PickupTarget =
+  | { readonly kind: 'here'; readonly channel: SendableChannels }
+  | { readonly kind: 'fallback'; readonly channel: SendableChannels }
+  | { readonly kind: 'noFallback' }
+  | { readonly kind: 'unavailable' };
+
+const asSendable = (
+  channel: GuildBasedChannel | TextBasedChannel | null,
+): SendableChannels | null => {
+  if (channel === null || !channel.isTextBased() || !channel.isSendable()) {
+    return null;
+  }
+  return channel;
+};
+
+/**
+ * A pickup belongs in the channel it was called for, so the invoking channel
+ * wins. The configured channel only steps in when the bot cannot write there,
+ * so a locked-down channel does not swallow the call entirely.
+ */
+const resolveTarget = async (
+  interaction: ChatInputCommandInteraction,
+  guild: Guild,
+  settings: GuildSettings,
+): Promise<PickupTarget> => {
+  // The interaction usually carries its own channel; the fetch is for the rare
+  // case where discord.js could not build one from the payload.
+  const invoked =
+    interaction.channel ??
+    (interaction.channelId === null
+      ? null
+      : await guild.channels.fetch(interaction.channelId).catch(() => null));
+
+  const here = asSendable(invoked);
+  if (here !== null) {
+    return { kind: 'here', channel: here };
+  }
+
+  if (settings.pickupChannelId === null) {
+    return { kind: 'noFallback' };
+  }
+
+  const configured = asSendable(
+    await guild.channels.fetch(settings.pickupChannelId).catch(() => null),
+  );
+  return configured === null ? { kind: 'unavailable' } : { kind: 'fallback', channel: configured };
+};
+
 const execute = async (
   interaction: ChatInputCommandInteraction,
   context: AppContext,
@@ -41,18 +99,17 @@ const execute = async (
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const settings = context.settings.get(interaction.guildId);
-  if (settings.pickupChannelId === null) {
-    await interaction.editReply({ content: strings.noChannelConfigured });
+  const target = await resolveTarget(interaction, interaction.guild, settings);
+  if (target.kind === 'noFallback') {
+    await interaction.editReply({ content: strings.noFallbackChannel });
     return;
   }
-
-  const channel = await interaction.guild.channels
-    .fetch(settings.pickupChannelId)
-    .catch(() => null);
-  if (channel === null || !channel.isTextBased() || !channel.isSendable()) {
+  if (target.kind === 'unavailable') {
     await interaction.editReply({ content: strings.channelUnavailable });
     return;
   }
+
+  const channel = target.channel;
 
   const info = (interaction.options.getString('info') ?? '').trim();
   const extracted = extractStartTime(info, settings.timezone, context.now());
@@ -110,7 +167,11 @@ const execute = async (
     }
 
     const notice = info !== '' && extracted.startsAt === null ? `\n${strings.noTimeFound}` : '';
-    await interaction.editReply({ content: `${strings.posted(message.url)}${notice}` });
+    const confirmation =
+      target.kind === 'fallback'
+        ? strings.postedElsewhere(channel.id, message.url)
+        : strings.posted(message.url);
+    await interaction.editReply({ content: `${confirmation}${notice}` });
   } catch (error) {
     context.pickups.remove(pickupId);
     context.logger.error({ err: error, guildId: interaction.guildId }, 'failed to post pickup');

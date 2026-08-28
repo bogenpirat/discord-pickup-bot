@@ -172,6 +172,13 @@ export interface FakeCommandOptions extends FakeInteractionOptions {
   readonly channels?: Readonly<Record<string, { id: string } | null>>;
   readonly roles?: Readonly<Record<string, { id: string } | null>>;
   readonly focused?: string;
+  /** The channel the command was used in. */
+  readonly channelId?: string;
+  /** Channels `guild.channels.fetch` cannot resolve. */
+  readonly missingChannelIds?: readonly string[];
+  /** Channels the bot is not allowed to write in. */
+  readonly unsendableChannelIds?: readonly string[];
+  readonly messageId?: string;
   readonly sendable?: boolean;
   readonly sendFails?: boolean;
   readonly messageMissing?: boolean;
@@ -197,9 +204,12 @@ export const createFakeCommandInteraction = (
   const state = { deferred: false, replied: false };
   const guildId = options.guildId === undefined ? 'guild-1' : options.guildId;
 
-  const postedMessage = {
-    id: 'message-1',
-    url: 'https://discord.com/channels/guild-1/channel-1/message-1',
+  const messageId = options.messageId ?? 'message-1';
+  const invokedChannelId = options.channelId ?? 'channel-1';
+
+  const messageIn = (channelId: string) => ({
+    id: messageId,
+    url: `https://discord.com/channels/${guildId ?? 'guild-1'}/${channelId}/${messageId}`,
     edit: async (payload: unknown) => {
       if (options.editFails === true) {
         throw new Error('cannot edit');
@@ -207,18 +217,20 @@ export const createFakeCommandInteraction = (
       edited.push(payload);
       return undefined;
     },
-  };
+  });
 
-  const channel = {
-    id: 'channel-1',
+  /** Every channel behaves the same unless a test singles one out by id. */
+  const channelFor = (channelId: string) => ({
+    id: channelId,
     isTextBased: () => true,
-    isSendable: () => options.sendable ?? true,
+    isSendable: () =>
+      (options.sendable ?? true) && !(options.unsendableChannelIds ?? []).includes(channelId),
     messages: {
-      fetch: async (messageId: string) => {
-        if (options.messageMissing === true || messageId !== postedMessage.id) {
+      fetch: async (wanted: string) => {
+        if (options.messageMissing === true || wanted !== messageId) {
           throw new Error('unknown message');
         }
-        return postedMessage;
+        return messageIn(channelId);
       },
     },
     send: async (payload: unknown) => {
@@ -226,21 +238,25 @@ export const createFakeCommandInteraction = (
         throw new Error('cannot send');
       }
       sent.push(payload);
-      return postedMessage;
+      return messageIn(channelId);
     },
+  });
+
+  const channels = {
+    fetch: async (channelId: string) =>
+      (options.missingChannelIds ?? []).includes(channelId) ? null : channelFor(channelId),
   };
 
   const interaction = {
     commandName: options.commandName ?? 'pickup',
     locale: options.locale ?? 'de',
     guildId,
+    channelId: invokedChannelId,
+    channel: channelFor(invokedChannelId),
     user: { id: options.userId ?? 'user-1' },
     memberPermissions: permissions(options.manageGuild ?? false),
     member: guildId === null ? null : { roles: [...(options.roleIds ?? [])] },
-    guild:
-      guildId === null
-        ? null
-        : { name: options.guildName ?? 'Test Guild', channels: { fetch: async () => channel } },
+    guild: guildId === null ? null : { name: options.guildName ?? 'Test Guild', channels },
     inGuild: () => guildId !== null,
     get deferred() {
       return state.deferred;

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { aliasCommand } from '../../src/discord/aliasCommand.ts';
 import { createButtonRegistry } from '../../src/discord/buttonRegistry.ts';
 import { createCommandRegistry } from '../../src/discord/commandRegistry.ts';
 import { encodeClose, encodeRespond } from '../../src/discord/customId.ts';
@@ -109,6 +110,61 @@ describe('commandRegistry', () => {
         createTestContext(),
       ),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('aliasCommand', () => {
+  it('keeps the definition apart from the name', () => {
+    const original = stubCommand({
+      definition: {
+        name: 'pickup',
+        description: 'stub',
+        options: [{ type: 3, name: 'info', description: 'free text' }],
+      },
+    });
+
+    const alias = aliasCommand(original, 'valo');
+    const definition = alias.definition as { description?: string; options?: unknown[] };
+
+    expect(alias.name).toBe('valo');
+    expect(alias.definition.name).toBe('valo');
+    expect(definition.description).toBe('stub');
+    expect(definition.options).toEqual((original.definition as { options?: unknown[] }).options);
+    expect(original.definition.name).toBe('pickup');
+  });
+
+  it('drops localized names, which belong to the original name', () => {
+    const original = stubCommand({
+      definition: {
+        name: 'pickup',
+        description: 'stub',
+        name_localizations: { de: 'abholen' },
+      },
+    });
+
+    expect(aliasCommand(original, 'valo').definition.name_localizations).toBeNull();
+  });
+
+  it('shares the handlers with the original', async () => {
+    const execute = vi.fn(async () => undefined);
+    const autocomplete = vi.fn(async () => undefined);
+    const registry = createCommandRegistry([
+      stubCommand({ execute, autocomplete }),
+      aliasCommand(stubCommand({ execute, autocomplete }), 'valo'),
+    ]);
+    const context = createTestContext();
+
+    await registry.dispatch(
+      createFakeCommandInteraction({ commandName: 'valo' }).interaction,
+      context,
+    );
+    await registry.dispatchAutocomplete(
+      createFakeCommandInteraction({ commandName: 'valo' }).interaction as never,
+      context,
+    );
+
+    expect(execute).toHaveBeenCalledOnce();
+    expect(autocomplete).toHaveBeenCalledOnce();
   });
 });
 

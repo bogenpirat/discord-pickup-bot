@@ -21,10 +21,12 @@ beforeEach(() => {
   db = freshDatabase();
 });
 
-const newPickup = (overrides: Partial<{ startsAt: number | null; note: string | null }> = {}) =>
+const newPickup = (
+  overrides: Partial<{ startsAt: number | null; note: string | null; channelId: string }> = {},
+) =>
   createPickupRepository(db).create({
     guildId: GUILD,
-    channelId: 'channel-1',
+    channelId: overrides.channelId ?? 'channel-1',
     creatorId: 'creator-1',
     startsAt: overrides.startsAt ?? null,
     startsAtText: null,
@@ -192,6 +194,27 @@ describe('pickupRepository', () => {
     const id = newPickup();
     repository.remove(id);
     expect(repository.findById(id)).toBeUndefined();
+  });
+
+  it('finds the latest posted pickup of one channel only', () => {
+    const repository = createPickupRepository(db);
+    const here = newPickup({ channelId: 'channel-1' });
+    const elsewhere = newPickup({ channelId: 'channel-2' });
+    repository.attachMessage(here, 'message-1');
+    repository.attachMessage(elsewhere, 'message-2');
+
+    expect(repository.findLatestPosted(GUILD, 'channel-1')?.id).toBe(here);
+    expect(repository.findLatestPosted(GUILD, 'channel-2')?.id).toBe(elsewhere);
+    expect(repository.findLatestPosted(GUILD, 'channel-3')).toBeUndefined();
+  });
+
+  it('skips pickups that never made it into the channel', () => {
+    const repository = createPickupRepository(db);
+    const posted = newPickup();
+    repository.attachMessage(posted, 'message-1');
+    newPickup();
+
+    expect(repository.findLatestPosted(GUILD, 'channel-1')?.id).toBe(posted);
   });
 });
 

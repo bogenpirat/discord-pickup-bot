@@ -507,13 +507,77 @@ describe('/valo', () => {
     expect(valoCommand.name).toBe('valo');
   });
 
-  it('refuses when no channel is configured', async () => {
+  it('posts where it was called even when no fallback channel is configured', async () => {
     const context = createTestContext();
-    const fake = createFakeCommandInteraction({ commandName: 'valo' });
+    const fake = createFakeCommandInteraction({ commandName: 'valo', channelId: 'channel-7' });
 
     await valoCommand.execute(fake.interaction, context);
 
-    expect(fake.messages().join(' ')).toContain('kein Pickup-Kanal');
+    expect(context.pickups.findByMessageId('message-1')?.channelId).toBe('channel-7');
+    expect(fake.messages().join(' ')).toContain('Pickup gepostet');
+  });
+
+  it('prefers the calling channel over the configured one', async () => {
+    const context = configured();
+    const fake = createFakeCommandInteraction({ channelId: 'channel-7' });
+
+    await valoCommand.execute(fake.interaction, context);
+
+    expect(context.pickups.findByMessageId('message-1')?.channelId).toBe('channel-7');
+    expect(fake.messages().join(' ')).toContain('Pickup gepostet');
+  });
+
+  it('falls back to the configured channel when it cannot post where it was called', async () => {
+    const context = configured();
+    const fake = createFakeCommandInteraction({
+      channelId: 'channel-7',
+      unsendableChannelIds: ['channel-7'],
+    });
+
+    await valoCommand.execute(fake.interaction, context);
+
+    expect(context.pickups.findByMessageId('message-1')?.channelId).toBe('channel-1');
+    expect(fake.messages().join(' ')).toContain('in <#channel-1> gelandet');
+  });
+
+  it('falls back when the calling channel cannot be resolved at all', async () => {
+    const context = configured();
+    const fake = createFakeCommandInteraction({
+      channelId: 'channel-7',
+      missingChannelIds: ['channel-7'],
+      unsendableChannelIds: ['channel-7'],
+    });
+    // discord.js could not build a channel from the payload either.
+    (fake.interaction as unknown as { channel: unknown }).channel = null;
+
+    await valoCommand.execute(fake.interaction, context);
+
+    expect(context.pickups.findByMessageId('message-1')?.channelId).toBe('channel-1');
+  });
+
+  it('asks for a fallback channel when it cannot post where it was called', async () => {
+    const context = createTestContext();
+    const fake = createFakeCommandInteraction({
+      channelId: 'channel-7',
+      unsendableChannelIds: ['channel-7'],
+    });
+
+    await valoCommand.execute(fake.interaction, context);
+
+    expect(fake.messages().join(' ')).toContain('kein Ausweich-Kanal');
+  });
+
+  it('gives up when the configured fallback is gone as well', async () => {
+    const context = configured();
+    const fake = createFakeCommandInteraction({
+      channelId: 'channel-7',
+      unsendableChannelIds: ['channel-7'],
+      missingChannelIds: ['channel-1'],
+    });
+
+    await valoCommand.execute(fake.interaction, context);
+
+    expect(fake.messages().join(' ')).toContain('nicht schreiben');
   });
 
   it('refuses outside a guild', async () => {
@@ -525,7 +589,7 @@ describe('/valo', () => {
     expect(fake.messages().join(' ')).toContain('nur auf einem Server');
   });
 
-  it('refuses when the channel cannot be posted to', async () => {
+  it('refuses when no channel at all can be posted to', async () => {
     const context = configured();
     const fake = createFakeCommandInteraction({ sendable: false });
 
@@ -711,6 +775,35 @@ describe('/valo-time', () => {
 
     expect(stored(context)?.startsAt).toBe(at('2026-07-27T18:30:00Z'));
     expect(fake.messages().join(' ')).toContain('Zeit geändert');
+  });
+
+  it('ignores a pickup that was posted in another channel', async () => {
+    const context = await posted();
+    const fake = createFakeCommandInteraction({
+      channelId: 'channel-7',
+      strings: { time: '20:30' },
+    });
+
+    await valoTimeCommand.execute(fake.interaction, context);
+
+    expect(stored(context)?.startsAt).toBeNull();
+    expect(fake.messages().join(' ')).toContain('noch kein Pickup gepostet');
+  });
+
+  it('edits the newest pickup of this channel, not of the server', async () => {
+    const context = await posted();
+    const elsewhere = createFakeCommandInteraction({
+      channelId: 'channel-7',
+      messageId: 'message-7',
+      strings: { info: 'spazierrunde sonntagabend' },
+    });
+    await valoCommand.execute(elsewhere.interaction, context);
+
+    const fake = createFakeCommandInteraction({ strings: { time: '20:30' } });
+    await valoTimeCommand.execute(fake.interaction, context);
+
+    expect(stored(context)?.startsAt).toBe(at('2026-07-27T18:30:00Z'));
+    expect(context.pickups.findByMessageId('message-7')?.startsAt).toBeNull();
   });
 
   it('accepts a weekday with a time', async () => {

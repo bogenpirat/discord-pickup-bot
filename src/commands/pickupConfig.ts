@@ -31,14 +31,16 @@ const definition = new SlashCommandBuilder()
     subcommand
       .setName('channel')
       .setNameLocalizations({ de: 'kanal' })
-      .setDescription('Set the channel pickup calls are posted to')
-      .setDescriptionLocalizations({ de: 'Kanal festlegen, in dem Pickups gepostet werden' })
+      .setDescription('Set the fallback channel used when I cannot post where /valo was called')
+      .setDescriptionLocalizations({
+        de: 'Ausweich-Kanal für den Fall, dass ich dort, wo /valo genutzt wurde, nicht schreiben darf',
+      })
       .addChannelOption((option) =>
         option
           .setName('channel')
           .setNameLocalizations({ de: 'kanal' })
-          .setDescription('Target channel')
-          .setDescriptionLocalizations({ de: 'Zielkanal' })
+          .setDescription('Fallback channel')
+          .setDescriptionLocalizations({ de: 'Ausweich-Kanal' })
           .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
           .setRequired(true),
       ),

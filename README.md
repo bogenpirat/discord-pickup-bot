@@ -1,8 +1,8 @@
 # Discord Pickup Bot
 
 Coordinates pickup games for a video game. A member calls a pickup with `/valo`, the bot
-posts one message to a configured channel, pings a configured role, and keeps a live tally
-of who is **Dabei**, **Später** (joining later), or **Raus**.
+posts one message to the channel the command was used in, pings a configured role, and
+keeps a live tally of who is **Dabei**, **Später** (joining later), or **Raus**.
 
 It also watches a configured channel for Steam store links to unreleased games. When one
 is posted, the bot reacts with 👀 and tracks the game's release date; once it actually
@@ -16,9 +16,9 @@ Discord's own locale.
 
 | Command | Who | What |
 |---|---|---|
-| `/valo [info]` | everyone | Posts a pickup call to the configured channel |
-| `/valo-time <time>` | creator or config access | Sets the start time of the last posted pickup |
-| `/pickup-config kanal <#channel>` | config access | Where pickup calls are posted |
+| `/valo [info]` | everyone | Posts a pickup call to the channel it was used in |
+| `/valo-time <time>` | creator or config access | Sets the start time of the last pickup posted in this channel |
+| `/pickup-config kanal <#channel>` | config access | Fallback channel, used only when the bot cannot post where `/valo` was called |
 | `/pickup-config rolle [@role]` | config access | Role to mention, omit to clear |
 | `/pickup-config emoji <option> [emoji]` | config access | Icon shown for one option, omit to reset |
 | `/pickup-config zeitzone <tz>` | config access | IANA zone used to read start times |
@@ -260,7 +260,7 @@ Open **OAuth2 → OAuth2 URL Generator**.
 
 | Permission | Bit | Needed for |
 |---|---|---|
-| View Channel | 1024 | Seeing the configured pickup and Steam-watch channels |
+| View Channel | 1024 | Seeing the channels pickups are called in, plus the Steam-watch channel |
 | Send Messages | 2048 | Posting the pickup call and Steam release announcements |
 | Embed Links | 16384 | The embeds holding the tally and the release announcement — without it those messages post empty |
 | Add Reactions | 64 | Reacting 👀 on a message once the bot starts watching its Steam link |
@@ -288,7 +288,8 @@ to add a bot.
 Server-level permissions can be overridden per channel. In the channel you intend to use,
 **Edit Channel → Permissions**, and confirm the bot's role has **View Channel**,
 **Send Messages**, and **Embed Links** allowed. A red ✗ here silently overrides the
-invite, and `/valo` will answer *"Ich kann im konfigurierten Kanal nicht schreiben."*
+invite. `/valo` then falls back to the channel set with `/pickup-config kanal`, and says
+so; with no fallback set it answers *"Ich kann hier nicht schreiben …"*.
 
 Announcement channels also work; forum and voice channels do not.
 
@@ -350,7 +351,7 @@ reports `healthy` within about a minute.
 Run these once per server, as someone with **Manage Server** or a `POWER_USER_IDS` entry:
 
 ```
-/pickup-config kanal       #pickup
+/pickup-config kanal       #pickup                 # optional; fallback when /valo cannot post where it was called
 /pickup-config rolle       @Pickup
 /pickup-config zeitzone    Europe/Berlin
 /pickup-config admin-rolle @Orga          # optional; lets that role configure too
@@ -369,7 +370,7 @@ Then `/valo 20:30` to try it. If the commands do not appear, see below.
 | Commands appear only after a long delay | `DISCORD_DEV_GUILD_ID` was blank, so they registered globally |
 | `Invalid environment configuration` at startup | `DISCORD_TOKEN` or `DISCORD_APP_ID` missing from `.env` |
 | `An invalid token was provided` | Token was reset in the portal, or copied with whitespace |
-| Bot online but `/valo` says it cannot write | Channel permission override — see step 7 |
+| Bot online but `/valo` says it cannot write | Channel permission override in this channel *and* in the fallback channel — see step 7 |
 | Message posts but the role is not pinged | Missing *Mention All Roles*, and the role is not mentionable — see step 6 |
 | Embed missing, message looks empty | *Embed Links* not granted |
 

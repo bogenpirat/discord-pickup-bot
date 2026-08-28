@@ -31,8 +31,11 @@ export interface PickupRepository {
   attachMessage(id: number, messageId: string): void;
   findById(id: number): PickupRecord | undefined;
   findByMessageId(messageId: string): PickupRecord | undefined;
-  /** The most recent pickup that actually made it into a channel. */
-  findLatestPosted(guildId: string): PickupRecord | undefined;
+  /**
+   * The most recent pickup that actually made it into the given channel.
+   * Scoped per channel because pickups no longer all live in one place.
+   */
+  findLatestPosted(guildId: string, channelId: string): PickupRecord | undefined;
   setStart(id: number, startsAt: number | null, startsAtText: string | null): void;
   close(id: number, closedAt: number): void;
   remove(id: number): void;
@@ -61,7 +64,9 @@ export const createPickupRepository = (db: DatabaseSync): PickupRepository => {
   const byIdStatement = db.prepare('SELECT * FROM pickups WHERE id = ?');
   const byMessageStatement = db.prepare('SELECT * FROM pickups WHERE message_id = ?');
   const latestPostedStatement = db.prepare(
-    'SELECT * FROM pickups WHERE guild_id = ? AND message_id IS NOT NULL ORDER BY created_at DESC, id DESC LIMIT 1',
+    `SELECT * FROM pickups
+     WHERE guild_id = ? AND channel_id = ? AND message_id IS NOT NULL
+     ORDER BY created_at DESC, id DESC LIMIT 1`,
   );
   const setStartStatement = db.prepare(
     'UPDATE pickups SET starts_at = ?, starts_at_text = ? WHERE id = ?',
@@ -95,8 +100,8 @@ export const createPickupRepository = (db: DatabaseSync): PickupRepository => {
       const row = byMessageStatement.get(messageId);
       return row === undefined ? undefined : toPickup(row as SqlRow);
     },
-    findLatestPosted: (guildId) => {
-      const row = latestPostedStatement.get(guildId);
+    findLatestPosted: (guildId, channelId) => {
+      const row = latestPostedStatement.get(guildId, channelId);
       return row === undefined ? undefined : toPickup(row as SqlRow);
     },
     setStart: (id, startsAt, startsAtText) => {

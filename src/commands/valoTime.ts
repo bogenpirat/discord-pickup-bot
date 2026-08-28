@@ -62,7 +62,13 @@ const execute = async (
 
   const guildId = interaction.guildId;
   const guildName = interaction.guild.name;
-  const latest = context.pickups.findLatestPosted(guildId);
+  // Pickups can now sit in any channel, so "the last pickup" only means the
+  // last one in this channel — editing one the caller cannot see would be worse
+  // than saying there is nothing here.
+  const latest =
+    interaction.channelId === null
+      ? undefined
+      : context.pickups.findLatestPosted(guildId, interaction.channelId);
   if (latest === undefined) {
     await interaction.editReply({ content: strings.noPickupToEdit });
     return;

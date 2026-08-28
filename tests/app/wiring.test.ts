@@ -6,7 +6,7 @@ import { buildButtonRegistry, buildCommandRegistry, COMMANDS } from '../../src/a
 import { migrate } from '../../src/db/migrations.ts';
 import { createClient } from '../../src/discord/client.ts';
 import { createLogger } from '../../src/logger.ts';
-import { silentLogger } from '../helpers/fakes.ts';
+import { createFakeCommandInteraction, createTestContext, silentLogger } from '../helpers/fakes.ts';
 
 describe('createAppContext', () => {
   it('wires every repository against the given database', () => {
@@ -62,8 +62,36 @@ describe('createAppContext', () => {
 describe('registries', () => {
   it('registers every slash command with unique names', () => {
     const names = COMMANDS.map((command) => command.name);
-    expect(names).toEqual(['valo', 'valo-time', 'pickup-config']);
+    expect(names).toEqual(['valo', 'pickup', 'valo-time', 'pickup-time', 'pickup-config']);
     expect(new Set(names).size).toBe(names.length);
+  });
+
+  it.each([
+    ['pickup', 'valo'],
+    ['pickup-time', 'valo-time'],
+  ])('registers /%s as an alias of /%s', (aliasName, originalName) => {
+    const alias = COMMANDS.find((command) => command.name === aliasName);
+    const original = COMMANDS.find((command) => command.name === originalName);
+
+    expect(alias?.execute).toBe(original?.execute);
+    expect(alias?.definition).toEqual({
+      ...original?.definition,
+      name: aliasName,
+      name_localizations: null,
+    });
+  });
+
+  it('runs the same handler whichever name was used', async () => {
+    const registry = buildCommandRegistry();
+    const context = createTestContext();
+    const fake = createFakeCommandInteraction({
+      commandName: 'pickup',
+      strings: { info: 'ranked um halb 9' },
+    });
+
+    await registry.dispatch(fake.interaction, context);
+
+    expect(context.pickups.findByMessageId('message-1')?.note).toBe('ranked um halb 9');
   });
 
   it('exposes a serialisable definition per command', () => {

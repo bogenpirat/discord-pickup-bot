@@ -18,6 +18,8 @@ Discord's own locale.
 |---|---|---|
 | `/valo [info]` | everyone | Posts a pickup call to the channel it was used in |
 | `/valo-time <time>` | creator or config access | Sets the start time of the last pickup posted in this channel |
+| `/pickup [info]` | everyone | Same as `/valo` |
+| `/pickup-time <time>` | creator or config access | Same as `/valo-time` |
 | `/pickup-config kanal <#channel>` | config access | Fallback channel, used only when the bot cannot post where `/valo` was called |
 | `/pickup-config rolle [@role]` | config access | Role to mention, omit to clear |
 | `/pickup-config emoji <option> [emoji]` | config access | Icon shown for one option, omit to reset |
@@ -27,6 +29,9 @@ Discord's own locale.
 | `/pickup-config steam-kanal <#channel>` | config access | Channel watched for Steam store links |
 | `/pickup-config steam-liste` | config access | Lists games currently being watched for release |
 | `/pickup-config steam-entfernen <id>` | config access | Stops watching a game |
+
+`/pickup` and `/pickup-time` are aliases: same options, same behaviour, whichever name is
+easier to remember.
 
 English clients see `/valo info:`, `/valo-time time:` and
 `/pickup-config channel|role|timezone|emoji|show|admin-role|steam-channel|steam-list|steam-remove`.

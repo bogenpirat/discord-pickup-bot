@@ -127,7 +127,7 @@ const show = (className, text) => {
  * from /pickup/<secret>/valorant-playground it would reach /pickup/<secret>/call
  * and 404. This also survives a trailing slash and any prefix a proxy adds.
  *
- * The trailing-slash regex uses [/] rather than \/ because this whole script is a
+ * The trailing-slash regex uses [/] rather than / because this whole script is a
  * template literal: a backslash escape would be eaten before it ever reached the
  * browser, leaving //+$/ behind and breaking the page.
  */

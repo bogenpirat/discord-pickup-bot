@@ -81,6 +81,24 @@ export interface Strings {
   readonly valorantNotBlocked: string;
   readonly valorantBlockedUntil: (timestamp: string) => string;
   readonly never: string;
+  readonly eloRankLabel: string;
+  readonly eloRankValue: (tier: string, rr: number) => string;
+  readonly eloLastChangeLabel: string;
+  readonly eloPeakLabel: string;
+  readonly eloPeakValue: (tier: string, season: string) => string;
+  readonly eloLeaderboardLabel: string;
+  readonly eloRecord: (parts: EloRecordParts) => string;
+  readonly eloNoHistory: string;
+  readonly eloNoRankedData: (riotId: string) => string;
+  readonly eloRiotIdAdminOnly: string;
+}
+
+export interface EloRecordParts {
+  readonly matches: number;
+  readonly wins: number;
+  readonly losses: number;
+  /** Already signed, e.g. `+164`. */
+  readonly net: string;
 }
 
 export interface RiotAccountParts {
@@ -220,6 +238,19 @@ const de: Strings = {
   valorantNotBlocked: 'nein',
   valorantBlockedUntil: (timestamp) => `ja, bis ${timestamp}`,
   never: 'nie',
+  eloRankLabel: 'Rang',
+  eloRankValue: (tier, rr) => `${tier} · ${rr} RR`,
+  eloLastChangeLabel: 'Letztes Match',
+  eloPeakLabel: 'Bestwert',
+  eloPeakValue: (tier, season) => `${tier} (${season})`,
+  eloLeaderboardLabel: 'Leaderboard',
+  eloRecord: (parts) =>
+    `${parts.matches} Matches · ${parts.wins}S ${parts.losses}N · ${parts.net} Elo`,
+  eloNoHistory: 'keine gewerteten Matches gefunden',
+  eloNoRankedData: (riotId) =>
+    `Für **${riotId}** liegen keine Ranglisten-Daten vor. Vielleicht wurde die Platzierung noch nicht gespielt.`,
+  eloRiotIdAdminOnly:
+    'Eine fremde Riot-ID darf nur abfragen, wer die Config-Befehle nutzen darf. Ohne Angabe zeigt der Befehl deinen eigenen Rang.',
 };
 
 const en: Strings = {
@@ -320,6 +351,19 @@ const en: Strings = {
   valorantNotBlocked: 'no',
   valorantBlockedUntil: (timestamp) => `yes, until ${timestamp}`,
   never: 'never',
+  eloRankLabel: 'Rank',
+  eloRankValue: (tier, rr) => `${tier} · ${rr} RR`,
+  eloLastChangeLabel: 'Last match',
+  eloPeakLabel: 'Peak',
+  eloPeakValue: (tier, season) => `${tier} (${season})`,
+  eloLeaderboardLabel: 'Leaderboard',
+  eloRecord: (parts) =>
+    `${parts.matches} matches · ${parts.wins}W ${parts.losses}L · ${parts.net} elo`,
+  eloNoHistory: 'no ranked matches found',
+  eloNoRankedData: (riotId) =>
+    `No ranked data for **${riotId}**. They may not have played placements yet.`,
+  eloRiotIdAdminOnly:
+    'Only members who may use the config commands can look up someone else. Without the option this command shows your own rank.',
 };
 
 export const STRINGS: Readonly<Record<AppLocale, Strings>> = { de, en };

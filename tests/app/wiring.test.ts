@@ -85,6 +85,8 @@ describe('registries', () => {
       'pickup-config',
       'valo-account',
       'valo-api',
+      'elo',
+      'mmr',
     ]);
     expect(new Set(names).size).toBe(names.length);
   });
@@ -92,6 +94,7 @@ describe('registries', () => {
   it.each([
     ['pickup', 'valo'],
     ['pickup-time', 'valo-time'],
+    ['mmr', 'elo'],
   ])('registers /%s as an alias of /%s', (aliasName, originalName) => {
     const alias = COMMANDS.find((command) => command.name === aliasName);
     const original = COMMANDS.find((command) => command.name === originalName);

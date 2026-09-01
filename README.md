@@ -34,6 +34,8 @@ Discord's own locale.
 | `/valo-account aktualisieren` | everyone | Re-reads your Riot ID after an account rename |
 | `/valo-account trennen` | everyone | Deletes your stored Riot ID |
 | `/valo-api status` | config access | Rate-limit usage and a live probe of the Valorant API |
+| `/elo [riot-id]` | everyone | Your rank plus a chart of how it moved, with rank ups and downs marked |
+| `/mmr [riot-id]` | everyone | Same as `/elo` |
 
 `/pickup` and `/pickup-time` are aliases: same options, same behaviour, whichever name is
 easier to remember.
@@ -42,8 +44,12 @@ English clients see `/valo info:`, `/valo-time time:`,
 `/pickup-config channel|role|timezone|emoji|show|admin-role|steam-channel|steam-list|steam-remove`
 and `/valo-account link|show|refresh|unlink`.
 
-The `/valo-account` and `/valo-api` commands need `VALORANT_API_KEY` in `.env`. Without it
-they stay visible and say so when used; everything else works as before.
+The `/valo-account`, `/valo-api` and `/elo` commands need `VALORANT_API_KEY` in `.env`.
+Without it they stay visible and say so when used; everything else works as before.
+
+`/elo` reads the Riot ID you linked with `/valo-account`, so link once and the command needs
+no arguments. The optional `riot-id:` looks someone else up instead and is limited to config
+access — it spends the bot's rate limit on a player who never opted in. `/mmr` is an alias.
 
 ### Icons
 
@@ -497,6 +503,21 @@ Riot ID is stored as its **PUUID** (`riot_accounts`), because that is the identi
 survives an account rename; the name and tag are cached alongside it and refreshed by
 `/valo-account aktualisieren`.
 
+### The rank chart
+
+`/elo` draws its chart in-process and attaches it to the reply, so it needs no web server and
+no image dependency. `src/lib/image/` is a PNG encoder (`node:zlib` does the compression), a
+small rasterizer and a 5x7 bitmap font; `src/ui/mmrChart.ts` composes them.
+
+The y-axis bands are not a hardcoded rank table. `elo` is a tier's base plus the rank rating
+inside it, so `elo - rr` lands exactly on the tier boundary — the chart keeps labelling itself
+correctly when Riot renames or adds a tier. Rank ups and downs come from comparing `tier.id`
+between consecutive matches, and are drawn as a marker, a guide line and a label; labels that
+would collide are pushed into a further lane.
+
+One `/elo` costs about four requests against the rate limit: both MMR endpoints are
+Riot-backed, and the API counts its own upstream call as well as yours.
+
 ### The API playground
 
 Set `VALORANT_PLAYGROUND_SECRET` and the bot's web server also serves a single-page
@@ -541,6 +562,7 @@ src/http/       the bot's own web server: socket, route table, one route per fil
 src/commands/   one file per slash command
 src/buttons/    one file per button action
 src/valorant/   HenrikDev API client, with types generated from its OpenAPI spec
+src/lib/image/  a small PNG encoder and rasterizer, used to draw the /elo chart
 src/app/        composition: context and registries
 ```
 

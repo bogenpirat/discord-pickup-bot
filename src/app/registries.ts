@@ -1,5 +1,6 @@
 import { handleClose } from '../buttons/close.ts';
 import { handleRespond } from '../buttons/respond.ts';
+import { eloCommand } from '../commands/elo.ts';
 import { pickupConfigCommand } from '../commands/pickupConfig.ts';
 import { valoCommand } from '../commands/valo.ts';
 import { valoAccountCommand } from '../commands/valoAccount.ts';
@@ -18,6 +19,8 @@ export const COMMANDS: readonly SlashCommand[] = [
   pickupConfigCommand,
   valoAccountCommand,
   valoApiCommand,
+  eloCommand,
+  aliasCommand(eloCommand, 'mmr'),
 ];
 
 export const buildCommandRegistry = (): CommandRegistry => createCommandRegistry(COMMANDS);

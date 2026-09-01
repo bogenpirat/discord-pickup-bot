@@ -1,4 +1,5 @@
 import type { PickupChoice } from '../domain/pickupChoice.ts';
+import type { RiotIdProblem } from '../domain/valorant/riotId.ts';
 
 export const APP_LOCALES = ['de', 'en'] as const;
 
@@ -59,6 +60,47 @@ export interface Strings {
   readonly steamWatchNotFound: string;
   readonly steamReleasedContent: (name: string) => string;
   readonly steamPriceLabel: string;
+  readonly valorantNotConfigured: string;
+  readonly valorantUnauthorized: string;
+  readonly valorantRateLimited: string;
+  readonly valorantApiUnavailable: string;
+  readonly riotIdProblem: Readonly<Record<RiotIdProblem, string>>;
+  readonly invalidRiotId: (value: string, reason: string) => string;
+  readonly riotAccountNotFound: (riotId: string) => string;
+  readonly riotAccountLinked: (parts: RiotAccountParts) => string;
+  readonly riotAccountTaken: (riotId: string, userId: string) => string;
+  readonly riotAccountShown: (userId: string, parts: RiotAccountParts) => string;
+  readonly riotAccountNotLinked: string;
+  readonly riotAccountNotLinkedOther: (userId: string) => string;
+  readonly riotAccountRefreshed: (parts: RiotAccountParts) => string;
+  readonly riotAccountUnchanged: (parts: RiotAccountParts) => string;
+  readonly riotAccountUnlinked: string;
+  readonly valorantApiStatus: (parts: ValorantApiStatusParts) => string;
+  readonly valorantProbeOk: (version: string) => string;
+  readonly valorantProbeFailed: (reason: string) => string;
+  readonly valorantNotBlocked: string;
+  readonly valorantBlockedUntil: (timestamp: string) => string;
+  readonly never: string;
+}
+
+export interface RiotAccountParts {
+  readonly riotId: string;
+  readonly region: string;
+  readonly puuid: string;
+  /** Preformatted Discord timestamp, so this layer stays free of time logic. */
+  readonly linkedAt: string;
+}
+
+export interface ValorantApiStatusParts {
+  readonly probe: string;
+  readonly used: number;
+  readonly limit: number;
+  readonly waiting: number;
+  readonly requests: number;
+  readonly failures: number;
+  readonly rateLimitHits: number;
+  readonly lastRateLimited: string;
+  readonly blocked: string;
 }
 
 export interface SteamWatchListEntryParts {
@@ -135,6 +177,49 @@ const de: Strings = {
   steamWatchNotFound: 'Dazu habe ich keinen beobachteten Eintrag gefunden.',
   steamReleasedContent: (name) => `🎮 **${name}** ist jetzt verfügbar!`,
   steamPriceLabel: 'Preis',
+  valorantNotConfigured:
+    'Für diesen Bot ist kein Valorant-API-Schlüssel hinterlegt. Ein Admin muss `VALORANT_API_KEY` setzen.',
+  valorantUnauthorized:
+    'Die Valorant-API hat den Schlüssel abgelehnt. Ein Admin sollte `VALORANT_API_KEY` prüfen.',
+  valorantRateLimited:
+    'Das Limit der Valorant-API ist gerade erschöpft. Bitte versuch es in einer Minute noch einmal.',
+  valorantApiUnavailable:
+    'Die Valorant-API antwortet gerade nicht. Bitte versuch es später noch einmal.',
+  riotIdProblem: {
+    'missing-tag': 'es fehlt das `#` mit dem Tag',
+    'empty-name': 'vor dem `#` steht kein Name',
+    'name-too-long': 'der Name ist länger als 16 Zeichen',
+    'invalid-tag': 'der Tag muss aus 3 bis 5 Buchstaben oder Ziffern bestehen',
+  },
+  invalidRiotId: (value, reason) =>
+    `„${value}“ ist keine gültige Riot-ID: ${reason}. Beispiel: \`Name#EUW\`.`,
+  riotAccountNotFound: (riotId) =>
+    `Riot kennt **${riotId}** nicht. Achte auf Groß-/Kleinschreibung und den richtigen Tag.`,
+  riotAccountLinked: (parts) =>
+    `Verknüpft mit **${parts.riotId}** (Region \`${parts.region}\`).\nPUUID: \`${parts.puuid}\``,
+  riotAccountTaken: (riotId, userId) => `**${riotId}** ist bereits mit <@${userId}> verknüpft.`,
+  riotAccountShown: (userId, parts) =>
+    `<@${userId}> → **${parts.riotId}** (Region \`${parts.region}\`)\nVerknüpft seit ${parts.linkedAt}\nPUUID: \`${parts.puuid}\``,
+  riotAccountNotLinked: 'Du hast noch keine Riot-ID hinterlegt. Nutze `/valo-account verknüpfen`.',
+  riotAccountNotLinkedOther: (userId) => `<@${userId}> hat noch keine Riot-ID hinterlegt.`,
+  riotAccountRefreshed: (parts) =>
+    `Aktualisiert: du heißt jetzt **${parts.riotId}** (Region \`${parts.region}\`).`,
+  riotAccountUnchanged: (parts) =>
+    `Alles aktuell: **${parts.riotId}** (Region \`${parts.region}\`).`,
+  riotAccountUnlinked: 'Deine Riot-ID ist nicht mehr hinterlegt.',
+  valorantApiStatus: (parts) =>
+    [
+      `**Valorant-API:** ${parts.probe}`,
+      `**Limit:** ${parts.used}/${parts.limit} in der letzten Minute, ${parts.waiting} wartend`,
+      `**Gesperrt:** ${parts.blocked}`,
+      `**Gesamt:** ${parts.requests} Anfragen, ${parts.failures} Fehler, ${parts.rateLimitHits}× 429`,
+      `**Letztes 429:** ${parts.lastRateLimited}`,
+    ].join('\n'),
+  valorantProbeOk: (version) => `✅ erreichbar (Spielversion \`${version}\`)`,
+  valorantProbeFailed: (reason) => `⚠️ ${reason}`,
+  valorantNotBlocked: 'nein',
+  valorantBlockedUntil: (timestamp) => `ja, bis ${timestamp}`,
+  never: 'nie',
 };
 
 const en: Strings = {
@@ -195,6 +280,46 @@ const en: Strings = {
   steamWatchNotFound: 'Could not find a watched entry for that.',
   steamReleasedContent: (name) => `🎮 **${name}** is now available!`,
   steamPriceLabel: 'Price',
+  valorantNotConfigured:
+    'No Valorant API key is configured for this bot. An admin needs to set `VALORANT_API_KEY`.',
+  valorantUnauthorized:
+    'The Valorant API rejected the key. An admin should check `VALORANT_API_KEY`.',
+  valorantRateLimited: 'The Valorant API rate limit is exhausted. Please try again in a minute.',
+  valorantApiUnavailable: 'The Valorant API is not responding right now. Please try again later.',
+  riotIdProblem: {
+    'missing-tag': 'the `#` and tag are missing',
+    'empty-name': 'there is no name before the `#`',
+    'name-too-long': 'the name is longer than 16 characters',
+    'invalid-tag': 'the tag must be 3 to 5 letters or digits',
+  },
+  invalidRiotId: (value, reason) =>
+    `"${value}" is not a valid Riot ID: ${reason}. Example: \`Name#EUW\`.`,
+  riotAccountNotFound: (riotId) => `Riot does not know **${riotId}**. Check the spelling and tag.`,
+  riotAccountLinked: (parts) =>
+    `Linked to **${parts.riotId}** (region \`${parts.region}\`).\nPUUID: \`${parts.puuid}\``,
+  riotAccountTaken: (riotId, userId) => `**${riotId}** is already linked by <@${userId}>.`,
+  riotAccountShown: (userId, parts) =>
+    `<@${userId}> → **${parts.riotId}** (region \`${parts.region}\`)\nLinked since ${parts.linkedAt}\nPUUID: \`${parts.puuid}\``,
+  riotAccountNotLinked: 'You have not linked a Riot ID yet. Use `/valo-account link`.',
+  riotAccountNotLinkedOther: (userId) => `<@${userId}> has not linked a Riot ID yet.`,
+  riotAccountRefreshed: (parts) =>
+    `Updated: you are now **${parts.riotId}** (region \`${parts.region}\`).`,
+  riotAccountUnchanged: (parts) =>
+    `Already up to date: **${parts.riotId}** (region \`${parts.region}\`).`,
+  riotAccountUnlinked: 'Your Riot ID is no longer stored.',
+  valorantApiStatus: (parts) =>
+    [
+      `**Valorant API:** ${parts.probe}`,
+      `**Limit:** ${parts.used}/${parts.limit} in the last minute, ${parts.waiting} waiting`,
+      `**Blocked:** ${parts.blocked}`,
+      `**Totals:** ${parts.requests} requests, ${parts.failures} failures, ${parts.rateLimitHits}× 429`,
+      `**Last 429:** ${parts.lastRateLimited}`,
+    ].join('\n'),
+  valorantProbeOk: (version) => `✅ reachable (game version \`${version}\`)`,
+  valorantProbeFailed: (reason) => `⚠️ ${reason}`,
+  valorantNotBlocked: 'no',
+  valorantBlockedUntil: (timestamp) => `yes, until ${timestamp}`,
+  never: 'never',
 };
 
 export const STRINGS: Readonly<Record<AppLocale, Strings>> = { de, en };

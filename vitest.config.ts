@@ -8,7 +8,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html'],
       include: ['src/**'],
-      exclude: ['src/index.ts', 'src/scripts/**', 'src/types/**'],
+      exclude: ['src/index.ts', 'src/scripts/**', 'src/types/**', 'src/valorant/generated/**'],
       thresholds: {
         'src/domain/**': { lines: 100, branches: 100, functions: 100, statements: 100 },
         'src/db/**': { lines: 90, branches: 90, functions: 90, statements: 90 },
@@ -20,6 +20,7 @@ export default defineConfig({
         'src/buttons/**': { lines: 80, branches: 80, functions: 80, statements: 80 },
         'src/config/**': { lines: 90, branches: 90, functions: 90, statements: 90 },
         'src/steam/**': { lines: 90, branches: 90, functions: 90, statements: 90 },
+        'src/valorant/**': { lines: 90, branches: 90, functions: 90, statements: 90 },
       },
     },
   },

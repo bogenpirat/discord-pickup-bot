@@ -7,6 +7,7 @@ import type {
 import { type AppContext, createAppContext } from '../../src/app/context.ts';
 import { migrate } from '../../src/db/migrations.ts';
 import type { Logger } from '../../src/logger.ts';
+import type { ValorantClient } from '../../src/valorant/client.ts';
 
 export const silentLogger = (): Logger =>
   ({
@@ -69,12 +70,13 @@ export interface TestContext extends AppContext {
 export const createTestContext = (
   now = Temporal.Instant.from('2026-07-27T13:00:00Z'),
   powerUserIds: readonly string[] = [],
+  valorant: ValorantClient | null = null,
 ): TestContext => {
   const database = new DatabaseSync(':memory:');
   database.exec('PRAGMA foreign_keys = ON');
   migrate(database);
 
-  const context = createAppContext(database, silentLogger(), powerUserIds);
+  const context = createAppContext(database, silentLogger(), powerUserIds, null, valorant);
   return { ...context, now: () => now, database };
 };
 
@@ -171,6 +173,7 @@ export interface FakeCommandOptions extends FakeInteractionOptions {
   readonly integers?: Readonly<Record<string, number | null>>;
   readonly channels?: Readonly<Record<string, { id: string } | null>>;
   readonly roles?: Readonly<Record<string, { id: string } | null>>;
+  readonly users?: Readonly<Record<string, { id: string } | null>>;
   readonly focused?: string;
   /** The channel the command was used in. */
   readonly channelId?: string;
@@ -288,6 +291,7 @@ export const createFakeCommandInteraction = (
         return value;
       },
       getRole: (name: string) => options.roles?.[name] ?? null,
+      getUser: (name: string) => options.users?.[name] ?? null,
       getFocused: () => options.focused ?? '',
     },
     deferReply: async (payload: unknown) => {

@@ -11,6 +11,8 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
     "deploy": "node --env-file=.env src/scripts/deployCommands.ts",
+    "gen:valorant:fetch": "curl -sf https://api.henrikdev.xyz/openapi.json -o src/valorant/generated/openapi.json",
+    "gen:valorant": "npx -y openapi-typescript@7 src/valorant/generated/openapi.json -o src/valorant/generated/schema.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",

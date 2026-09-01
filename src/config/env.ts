@@ -26,6 +26,21 @@ const schema = z.object({
     .transform((value) => value.replace(/\/+$/, ''))
     .optional(),
   HTTP_PORT: z.coerce.number().int().min(10000).max(65535).default(18080),
+  // Key for the HenrikDev Valorant API (https://api.henrikdev.xyz). Blank or absent
+  // turns every Valorant command off rather than failing at boot, so the bot still
+  // runs its pickup duties on a deployment that has no key.
+  VALORANT_API_KEY: z.string().min(1).optional(),
+  // Requests per minute the key above is allowed. A basic key is limited to 30.
+  VALORANT_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).max(10_000).default(30),
+  // First path segment of the API playground, served at
+  // `<PUBLIC_BASE_URL>/<secret>/valorant-playground`. Blank or absent serves no
+  // playground at all. The URL is the only thing guarding it, so a short value is
+  // rejected rather than quietly accepted.
+  VALORANT_PLAYGROUND_SECRET: z
+    .string()
+    .min(24)
+    .regex(/^[A-Za-z0-9_-]+$/, 'must be url-safe: letters, digits, dot-free, - or _')
+    .optional(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   HEARTBEAT_PATH: z.string().min(1).default('/tmp/heartbeat'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('production'),

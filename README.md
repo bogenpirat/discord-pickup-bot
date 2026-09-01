@@ -29,12 +29,21 @@ Discord's own locale.
 | `/pickup-config steam-kanal <#channel>` | config access | Channel watched for Steam store links |
 | `/pickup-config steam-liste` | config access | Lists games currently being watched for release |
 | `/pickup-config steam-entfernen <id>` | config access | Stops watching a game |
+| `/valo-account verknüpfen <riot-id>` | everyone | Links your Riot ID, storing the PUUID behind it |
+| `/valo-account anzeigen [@member]` | everyone | Shows a linked Riot ID |
+| `/valo-account aktualisieren` | everyone | Re-reads your Riot ID after an account rename |
+| `/valo-account trennen` | everyone | Deletes your stored Riot ID |
+| `/valo-api status` | config access | Rate-limit usage and a live probe of the Valorant API |
 
 `/pickup` and `/pickup-time` are aliases: same options, same behaviour, whichever name is
 easier to remember.
 
-English clients see `/valo info:`, `/valo-time time:` and
-`/pickup-config channel|role|timezone|emoji|show|admin-role|steam-channel|steam-list|steam-remove`.
+English clients see `/valo info:`, `/valo-time time:`,
+`/pickup-config channel|role|timezone|emoji|show|admin-role|steam-channel|steam-list|steam-remove`
+and `/valo-account link|show|refresh|unlink`.
+
+The `/valo-account` and `/valo-api` commands need `VALORANT_API_KEY` in `.env`. Without it
+they stay visible and say so when used; everything else works as before.
 
 ### Icons
 
@@ -68,9 +77,12 @@ breaking the message.
 Setting the **admin role itself** is deliberately narrower — only 1 and 2. Otherwise
 anyone holding the admin role could hand it to another role and widen access on their own.
 
-> `/pickup-config` intentionally carries no `default_member_permissions`, because Discord
-> would then *hide* it from power users and admin-role holders entirely. It is visible to
-> everyone and refuses at runtime instead.
+`/valo-api status` uses the same three-way check, so whoever configures the bot can also
+see whether the Valorant API is reachable and how much of the rate limit is left.
+
+> `/pickup-config` and `/valo-api` intentionally carry no `default_member_permissions`,
+> because Discord would then *hide* them from power users and admin-role holders entirely.
+> They are visible to everyone and refuse at runtime instead.
 
 ### `/valo`
 
@@ -320,6 +332,9 @@ DISCORD_DEV_GUILD_ID=the id from step 8   # optional; blank = register globally
 POWER_USER_IDS=                           # optional; see below
 PUBLIC_BASE_URL=                          # optional; blank = no web server, no iCal button
 HTTP_PORT=18080                           # only used when PUBLIC_BASE_URL is set
+VALORANT_API_KEY=                         # optional; blank = no /valo-account, no /valo-api
+VALORANT_RATE_LIMIT_PER_MINUTE=30         # requests per minute your key allows
+VALORANT_PLAYGROUND_SECRET=               # optional; blank = no API playground
 ```
 
 `PUBLIC_BASE_URL` is the address the **iCal** button points at, so it has to be reachable
@@ -340,6 +355,16 @@ exposes.
 server permissions — useful so you can configure the bot without holding Manage Server.
 One ID, or several separated by commas. Copy an ID by right-clicking a user with Developer
 Mode on (step 8) → **Copy User ID**.
+
+`VALORANT_API_KEY` is a key from the [HenrikDev dashboard](https://docs.henrikdev.xyz). Leave
+it blank and `/valo-account` and `/valo-api` refuse politely while the rest of the bot runs
+unchanged. `VALORANT_RATE_LIMIT_PER_MINUTE` must match what your key actually allows — a
+basic key gets 30. The bot queues its own requests to stay under that number, and on a `429`
+backs off, holding every queued request until the API's own reset time has passed.
+
+`VALORANT_PLAYGROUND_SECRET` additionally serves an API playground from the bot's own web
+server, so it needs `PUBLIC_BASE_URL` set as well — see
+[The API playground](#the-api-playground) for what it exposes and what guards it.
 
 ### 10. Start and register
 
@@ -436,6 +461,70 @@ npm run check      # biome + tsc + tests with coverage thresholds
 | `npm run coverage` | Tests plus enforced coverage thresholds |
 | `npm run lint` / `npm run format` | Biome check / write |
 | `npm run typecheck` | `tsc` with full strictness |
+| `npm run gen:valorant:fetch` | Re-download the HenrikDev OpenAPI spec |
+| `npm run gen:valorant` | Regenerate the Valorant API types from that spec |
+
+### The Valorant API client
+
+`src/valorant/` wraps the [HenrikDev API](https://api.henrikdev.xyz) with one method per
+documented endpoint, each at its latest version. Response types are **generated** from the
+API's own OpenAPI spec, and both the spec snapshot and the generated types are committed:
+
+```sh
+npm run gen:valorant:fetch   # src/valorant/generated/openapi.json
+npm run gen:valorant         # src/valorant/generated/schema.ts
+```
+
+Committing both keeps CI off the network and makes an upstream API change show up as a
+reviewable diff. The generator runs through `npx` rather than as a devDependency, because
+`openapi-typescript` still pins TypeScript 5 as a peer while this repo is on 7. Nothing
+in the build, test or lint path needs it — `src/valorant/generated/` is excluded from Biome
+and from coverage.
+
+Every method answers a `Result`, never a thrown error:
+
+```ts
+const account = await context.valorant?.getAccount('Name', 'EUW');
+if (account?.ok) {
+  account.value.puuid;   // fully typed from the spec
+}
+```
+
+Requests are admitted by a shared sliding-window rate limiter sized to
+`VALORANT_RATE_LIMIT_PER_MINUTE`, and a `429` backs off with jitter, honouring `Retry-After`
+and `X-RateLimit-Reset` and holding every queued request until the reset has passed. A
+Riot ID is stored as its **PUUID** (`riot_accounts`), because that is the identifier that
+survives an account rename; the name and tag are cached alongside it and refreshed by
+`/valo-account aktualisieren`.
+
+### The API playground
+
+Set `VALORANT_PLAYGROUND_SECRET` and the bot's web server also serves a single-page
+playground for the client above:
+
+```
+<PUBLIC_BASE_URL>/<VALORANT_PLAYGROUND_SECRET>/valorant-playground
+```
+
+Pick an endpoint, fill the form it generates, and the reply comes back as formatted JSON
+with the rate-limit state next to it. The form is built from `src/valorant/catalog.ts`, a
+declarative description of every endpoint whose `invoke` calls the real typed client method
+— so an endpoint added to the client and the catalog shows up in the playground with no page
+changes. The crosshair endpoint renders its PNG instead of printing bytes.
+
+Generate the secret with something like `openssl rand -hex 24`; the config rejects anything
+under 24 characters or not URL-safe.
+
+> **Be clear about what this is.** An unguessable URL is the *only* thing in front of it —
+> there is no login. Anyone with the link can spend your rate limit and read any public
+> Valorant profile through your key. It is off unless the secret is set, it never appears in
+> a log line except once at startup, and it is served `noindex` and `no-store`, but treat
+> the URL as a credential. The four premium webhook **mutations** are implemented on the
+> client but deliberately left out of the playground, so a leaked URL cannot rewrite your
+> webhook subscriptions.
+
+Requests go through the same limiter as the Discord commands, so the playground cannot push
+the bot over its quota — it just queues behind everything else.
 
 ## Layout
 
@@ -447,6 +536,7 @@ src/discord/    client, custom ids, command and button dispatch
 src/http/       the bot's own web server: socket, route table, one route per file
 src/commands/   one file per slash command
 src/buttons/    one file per button action
+src/valorant/   HenrikDev API client, with types generated from its OpenAPI spec
 src/app/        composition: context and registries
 ```
 

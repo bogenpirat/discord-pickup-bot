@@ -131,3 +131,61 @@ describe('http server settings', () => {
     expect(loadEnv({ ...minimal, HTTP_PORT: value }).HTTP_PORT).toBe(Number(value));
   });
 });
+
+describe('valorant api settings', () => {
+  it('leaves the key absent and defaults the limit to a basic key', () => {
+    const env = loadEnv(minimal);
+
+    expect(env.VALORANT_API_KEY).toBeUndefined();
+    expect(env.VALORANT_RATE_LIMIT_PER_MINUTE).toBe(30);
+  });
+
+  it('treats a blank key as absent, so an empty line in .env disables the feature', () => {
+    expect(loadEnv({ ...minimal, VALORANT_API_KEY: '' }).VALORANT_API_KEY).toBeUndefined();
+  });
+
+  it('reads the key when it is set', () => {
+    expect(loadEnv({ ...minimal, VALORANT_API_KEY: 'HDEV-abc' }).VALORANT_API_KEY).toBe('HDEV-abc');
+  });
+
+  it('coerces the rate limit from its string form', () => {
+    expect(
+      loadEnv({ ...minimal, VALORANT_RATE_LIMIT_PER_MINUTE: '90' }).VALORANT_RATE_LIMIT_PER_MINUTE,
+    ).toBe(90);
+  });
+
+  it.each(['0', '-1', '1.5', 'lots', '10001'])('rejects %o as a rate limit', (value) => {
+    expect(() => loadEnv({ ...minimal, VALORANT_RATE_LIMIT_PER_MINUTE: value })).toThrow(
+      /Invalid environment configuration/,
+    );
+  });
+});
+
+describe('valorant playground', () => {
+  it('is absent by default', () => {
+    expect(loadEnv(minimal).VALORANT_PLAYGROUND_SECRET).toBeUndefined();
+  });
+
+  it('accepts a long url-safe secret', () => {
+    const secret = 'abcdefghijklmnopqrstuvwx_-09';
+    expect(
+      loadEnv({ ...minimal, VALORANT_PLAYGROUND_SECRET: secret }).VALORANT_PLAYGROUND_SECRET,
+    ).toBe(secret);
+  });
+
+  // The URL is the only thing guarding this page, so a weak one is a config error.
+  it.each(['short', 'a'.repeat(23)])('rejects %o as too short to hide behind', (value) => {
+    expect(() => loadEnv({ ...minimal, VALORANT_PLAYGROUND_SECRET: value })).toThrow(
+      /Invalid environment configuration/,
+    );
+  });
+
+  it.each([`${'a'.repeat(24)}/x`, `${'a'.repeat(24)}?`, `${'a'.repeat(24)} b`])(
+    'rejects %o as not url-safe',
+    (value) => {
+      expect(() => loadEnv({ ...minimal, VALORANT_PLAYGROUND_SECRET: value })).toThrow(
+        /Invalid environment configuration/,
+      );
+    },
+  );
+});

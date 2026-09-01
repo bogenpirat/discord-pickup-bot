@@ -8,10 +8,13 @@ import { openDatabase } from './db/database.ts';
 import { createClient } from './discord/client.ts';
 import { createSteamLinkListener } from './discord/steamLinkListener.ts';
 import { pickupCalendarRoute } from './http/routes/pickupCalendar.ts';
+import { valorantPlaygroundRoute } from './http/routes/valorantPlayground.ts';
 import { type RunningHttpServer, startHttpServer } from './http/server.ts';
+import { createRateLimiter } from './lib/rateLimiter.ts';
 import { createLogger } from './logger.ts';
 import { createSteamClient } from './steam/client.ts';
 import { startSteamWatchPoller } from './steam/poller.ts';
+import { createValorantClient, type ValorantClient } from './valorant/client.ts';
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
 
@@ -21,7 +24,32 @@ const logger = createLogger(env.LOG_LEVEL, env.NODE_ENV !== 'production');
 mkdirSync(dirname(env.DATABASE_PATH), { recursive: true });
 
 const db = openDatabase(env.DATABASE_PATH);
-const context = createAppContext(db, logger, env.POWER_USER_IDS, env.PUBLIC_BASE_URL ?? null);
+
+// Without a key the bot still runs its pickup duties; the Valorant commands are
+// registered either way and refuse at call time, because command registration
+// happens in a separate process that has no access to this context.
+const valorant: ValorantClient | null =
+  env.VALORANT_API_KEY === undefined
+    ? null
+    : createValorantClient({
+        apiKey: env.VALORANT_API_KEY,
+        limiter: createRateLimiter({ limit: env.VALORANT_RATE_LIMIT_PER_MINUTE }),
+      });
+
+logger.info(
+  valorant === null
+    ? { enabled: false }
+    : { enabled: true, requestsPerMinute: env.VALORANT_RATE_LIMIT_PER_MINUTE },
+  'valorant api client',
+);
+
+const context = createAppContext(
+  db,
+  logger,
+  env.POWER_USER_IDS,
+  env.PUBLIC_BASE_URL ?? null,
+  valorant,
+);
 const commands = buildCommandRegistry();
 const buttons = buildButtonRegistry();
 const client = createClient();
@@ -50,6 +78,22 @@ client.once(Events.ClientReady, (ready) => {
   const baseUrl = env.PUBLIC_BASE_URL;
 
   if (baseUrl !== undefined) {
+    // The playground needs both a client to drive and a secret to hide behind;
+    // without either it is simply not part of the route table, so its path 404s
+    // exactly like any other unclaimed one.
+    const playgroundSecret = env.VALORANT_PLAYGROUND_SECRET;
+    const playground =
+      valorant === null || playgroundSecret === undefined
+        ? []
+        : [valorantPlaygroundRoute({ client: valorant, secret: playgroundSecret, logger })];
+
+    if (playground.length > 0) {
+      logger.info(
+        { url: `${baseUrl}/${playgroundSecret}/valorant-playground` },
+        'valorant api playground served',
+      );
+    }
+
     httpServer = startHttpServer({
       port: env.HTTP_PORT,
       routes: [
@@ -59,6 +103,7 @@ client.once(Events.ClientReady, (ready) => {
           baseUrl,
           now: Date.now,
         }),
+        ...playground,
       ],
       logger,
     });

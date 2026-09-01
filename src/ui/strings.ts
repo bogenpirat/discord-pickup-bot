@@ -1,4 +1,5 @@
 import type { PickupChoice } from '../domain/pickupChoice.ts';
+import type { MatchOutcome } from '../domain/valorant/matchSummary.ts';
 import type { RiotIdProblem } from '../domain/valorant/riotId.ts';
 
 export const APP_LOCALES = ['de', 'en'] as const;
@@ -90,7 +91,30 @@ export interface Strings {
   readonly eloRecord: (parts: EloRecordParts) => string;
   readonly eloNoHistory: string;
   readonly eloNoRankedData: (riotId: string) => string;
-  readonly eloRiotIdAdminOnly: string;
+  readonly valorantRiotIdAdminOnly: string;
+  readonly matchTitle: (map: string, outcome: string) => string;
+  readonly matchOutcome: Readonly<Record<MatchOutcome, string>>;
+  readonly matchHeadline: (parts: MatchHeadlineParts) => string;
+  readonly matchYouLabel: (agent: string) => string;
+  readonly matchYouValue: (parts: MatchStatParts) => string;
+  readonly matchTeamLabel: string;
+  readonly matchEnemyLabel: string;
+  readonly matchNone: (riotId: string) => string;
+}
+
+export interface MatchHeadlineParts {
+  readonly score: string;
+  readonly mode: string;
+  /** A rendered Discord timestamp, so this layer stays free of time logic. */
+  readonly when: string;
+  readonly duration: string;
+}
+
+export interface MatchStatParts {
+  readonly kda: string;
+  readonly acs: number;
+  readonly adr: number;
+  readonly headshots: string;
 }
 
 export interface EloRecordParts {
@@ -249,8 +273,18 @@ const de: Strings = {
   eloNoHistory: 'keine gewerteten Matches gefunden',
   eloNoRankedData: (riotId) =>
     `Für **${riotId}** liegen keine Ranglisten-Daten vor. Vielleicht wurde die Platzierung noch nicht gespielt.`,
-  eloRiotIdAdminOnly:
-    'Eine fremde Riot-ID darf nur abfragen, wer die Config-Befehle nutzen darf. Ohne Angabe zeigt der Befehl deinen eigenen Rang.',
+  valorantRiotIdAdminOnly:
+    'Eine fremde Riot-ID darf nur abfragen, wer die Config-Befehle nutzen darf. Ohne Angabe nutzt der Befehl deine eigene verknüpfte Riot-ID.',
+  matchTitle: (map, outcome) => `${map} · ${outcome}`,
+  matchOutcome: { win: 'Sieg', loss: 'Niederlage', draw: 'Unentschieden' },
+  matchHeadline: (parts) =>
+    `**${parts.score}** · ${parts.mode} · ${parts.when} · ${parts.duration}`,
+  matchYouLabel: (agent) => `Deine Leistung (${agent})`,
+  matchYouValue: (parts) =>
+    `**${parts.kda}** K/D/A · ${parts.acs} ACS · ${parts.adr} ADR · ${parts.headshots} Kopftreffer`,
+  matchTeamLabel: 'Dein Team',
+  matchEnemyLabel: 'Gegner',
+  matchNone: (riotId) => `Für **${riotId}** habe ich kein letztes Match gefunden.`,
 };
 
 const en: Strings = {
@@ -362,8 +396,18 @@ const en: Strings = {
   eloNoHistory: 'no ranked matches found',
   eloNoRankedData: (riotId) =>
     `No ranked data for **${riotId}**. They may not have played placements yet.`,
-  eloRiotIdAdminOnly:
-    'Only members who may use the config commands can look up someone else. Without the option this command shows your own rank.',
+  valorantRiotIdAdminOnly:
+    'Only members who may use the config commands can look up someone else. Without the option this command uses your own linked Riot ID.',
+  matchTitle: (map, outcome) => `${map} · ${outcome}`,
+  matchOutcome: { win: 'Win', loss: 'Loss', draw: 'Draw' },
+  matchHeadline: (parts) =>
+    `**${parts.score}** · ${parts.mode} · ${parts.when} · ${parts.duration}`,
+  matchYouLabel: (agent) => `Your game (${agent})`,
+  matchYouValue: (parts) =>
+    `**${parts.kda}** K/D/A · ${parts.acs} ACS · ${parts.adr} ADR · ${parts.headshots} headshots`,
+  matchTeamLabel: 'Your team',
+  matchEnemyLabel: 'Enemy team',
+  matchNone: (riotId) => `I could not find a recent match for **${riotId}**.`,
 };
 
 export const STRINGS: Readonly<Record<AppLocale, Strings>> = { de, en };

@@ -87,6 +87,10 @@ describe('registries', () => {
       'valo-api',
       'elo',
       'mmr',
+      'elo-private',
+      'mmr-private',
+      'last',
+      'last-private',
     ]);
     expect(new Set(names).size).toBe(names.length);
   });
@@ -95,6 +99,7 @@ describe('registries', () => {
     ['pickup', 'valo'],
     ['pickup-time', 'valo-time'],
     ['mmr', 'elo'],
+    ['mmr-private', 'elo-private'],
   ])('registers /%s as an alias of /%s', (aliasName, originalName) => {
     const alias = COMMANDS.find((command) => command.name === aliasName);
     const original = COMMANDS.find((command) => command.name === originalName);

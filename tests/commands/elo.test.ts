@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { eloCommand } from '../../src/commands/elo.ts';
+import { eloCommand, eloPrivateCommand } from '../../src/commands/elo.ts';
 import type { Account, Mmr, MmrHistory } from '../../src/valorant/types.ts';
 import { createFakeCommandInteraction, createTestContext } from '../helpers/fakes.ts';
 import { fakeValorantClient } from '../helpers/valorant.ts';
@@ -143,7 +143,7 @@ describe('/elo for yourself', () => {
 
     const defer = fake.calls.find((call) => call.method === 'deferReply');
     expect(defer).toBeDefined();
-    expect(defer?.payload).toBeUndefined();
+    expect(defer?.payload).toEqual({});
   });
 
   it('answers with an embed and the chart attached', async () => {
@@ -253,6 +253,44 @@ describe('/elo for yourself', () => {
     await eloCommand.execute(fake.interaction, linked(healthy()));
 
     expect(fake.messages().join(' ')).toContain('nur auf einem Server');
+  });
+});
+
+describe('/elo-private', () => {
+  it('defers ephemerally, so only the caller sees the chart', async () => {
+    const fake = eloInteraction({ commandName: 'elo-private' });
+
+    await eloPrivateCommand.execute(fake.interaction, linked(healthy()));
+
+    const defer = fake.calls.find((call) => call.method === 'deferReply');
+    expect(defer?.payload).toEqual({ flags: 64 });
+  });
+
+  it('produces the same embed and chart as the public variant', async () => {
+    const open = eloInteraction();
+    const quiet = eloInteraction({ commandName: 'elo-private' });
+
+    await eloCommand.execute(open.interaction, linked(healthy()));
+    await eloPrivateCommand.execute(quiet.interaction, linked(healthy()));
+
+    const embedOf = (fake: ReturnType<typeof eloInteraction>) =>
+      (editPayload(fake)['embeds'] as { data: unknown }[])[0]?.data;
+
+    expect(embedOf(quiet)).toEqual(embedOf(open));
+    expect(editPayload(quiet)['files']).toHaveLength(1);
+  });
+
+  it('still refuses an unlinked member before deferring', async () => {
+    const client = healthy();
+    const fake = eloInteraction({ commandName: 'elo-private' });
+
+    await eloPrivateCommand.execute(
+      fake.interaction,
+      createTestContext(undefined, [], client.client),
+    );
+
+    expect(fake.messages().join(' ')).toContain('noch keine Riot-ID hinterlegt');
+    expect(fake.calls.map((call) => call.method)).not.toContain('deferReply');
   });
 });
 

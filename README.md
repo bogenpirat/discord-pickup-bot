@@ -36,6 +36,10 @@ Discord's own locale.
 | `/valo-api status` | config access | Rate-limit usage and a live probe of the Valorant API |
 | `/elo [riot-id]` | everyone | Your rank plus a chart of how it moved, with rank ups and downs marked |
 | `/mmr [riot-id]` | everyone | Same as `/elo` |
+| `/elo-private [riot-id]` | everyone | Same as `/elo`, answered only to you |
+| `/mmr-private [riot-id]` | everyone | Same as `/elo-private` |
+| `/last [riot-id]` | everyone | Summary and scoreboard of your last match |
+| `/last-private [riot-id]` | everyone | Same as `/last`, answered only to you |
 
 `/pickup` and `/pickup-time` are aliases: same options, same behaviour, whichever name is
 easier to remember.
@@ -47,9 +51,13 @@ and `/valo-account link|show|refresh|unlink`.
 The `/valo-account`, `/valo-api` and `/elo` commands need `VALORANT_API_KEY` in `.env`.
 Without it they stay visible and say so when used; everything else works as before.
 
-`/elo` reads the Riot ID you linked with `/valo-account`, so link once and the command needs
-no arguments. The optional `riot-id:` looks someone else up instead and is limited to config
-access — it spends the bot's rate limit on a player who never opted in. `/mmr` is an alias.
+`/elo` and `/last` read the Riot ID you linked with `/valo-account`, so link once and they
+need no arguments. The optional `riot-id:` looks someone else up instead and is limited to
+config access — it spends the bot's rate limit on a player who never opted in.
+
+Each has a `-private` twin that answers only to you. It is a separate command rather than an
+option on purpose: it is one keystroke away, and nobody posts their rank to the channel by
+forgetting to set a toggle. `/mmr` and `/mmr-private` are aliases of the `/elo` pair.
 
 ### Icons
 
@@ -516,7 +524,19 @@ between consecutive matches, and are drawn as a marker, a guide line and a label
 would collide are pushed into a further lane.
 
 One `/elo` costs about four requests against the rate limit: both MMR endpoints are
-Riot-backed, and the API counts its own upstream call as well as yours.
+Riot-backed, and the API counts its own upstream call as well as yours. `/last` asks for a
+single match and costs about two.
+
+### The match summary
+
+`/last` fetches the one most recent match by **puuid** — the identifier that survives a
+rename — and reduces it to that player's view of it in `src/domain/valorant/matchSummary.ts`:
+the scoreline from their side, win/loss/draw, their own K/D/A, ACS, ADR and headshot share,
+and both scoreboards sorted by combat score with their own row marked.
+
+Per-round averages divide by the rounds *both* teams played, so ACS and ADR match what the
+in-game scoreboard showed. The scoreboards are rendered in a code block because Discord's
+proportional font turns a column of numbers into a staircase.
 
 ### The API playground
 

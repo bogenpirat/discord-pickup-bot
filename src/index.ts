@@ -89,7 +89,7 @@ client.once(Events.ClientReady, (ready) => {
 
     if (playground.length > 0) {
       logger.info(
-        { url: `${baseUrl}/${playgroundSecret}/valorant-playground` },
+        { url: `${baseUrl}/pickup/${playgroundSecret}/valorant-playground` },
         'valorant api playground served',
       );
     }

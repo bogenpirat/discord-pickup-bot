@@ -14,11 +14,16 @@ export interface ValorantPlaygroundDeps {
 }
 
 /**
- * `/<secret>/valorant-playground` and its `/call` sibling. The secret is a path
- * segment rather than part of the pattern so a wrong one is compared in constant
- * time and answered with the same 404 as a path that matches nothing at all.
+ * `/pickup/<secret>/valorant-playground` and its `/call` sibling. It shares the
+ * `/pickup` prefix with the calendar route so the bot's whole HTTP surface sits
+ * under one path, which is what a reverse proxy in front of it will be
+ * forwarding.
+ *
+ * The secret is a path segment rather than part of the pattern, so a wrong one is
+ * compared in constant time and answered with the same 404 as a path that matches
+ * nothing at all.
  */
-export const VALORANT_PLAYGROUND_PATTERN = /^\/([^/]+)\/valorant-playground(\/call)?$/;
+export const VALORANT_PLAYGROUND_PATTERN = /^\/pickup\/([^/]+)\/valorant-playground(\/call)?$/;
 
 const HTML_HEADERS: Readonly<Record<string, string>> = {
   'Content-Type': 'text/html; charset=utf-8',

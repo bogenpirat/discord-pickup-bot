@@ -503,8 +503,12 @@ Set `VALORANT_PLAYGROUND_SECRET` and the bot's web server also serves a single-p
 playground for the client above:
 
 ```
-<PUBLIC_BASE_URL>/<VALORANT_PLAYGROUND_SECRET>/valorant-playground
+<PUBLIC_BASE_URL>/pickup/<VALORANT_PLAYGROUND_SECRET>/valorant-playground
 ```
+
+It sits under the same `/pickup` prefix as the calendar route, so a reverse proxy that
+already forwards `/pickup/*` to the bot needs no extra rule. The exact URL is printed once
+at startup — `docker compose logs bot | grep playground`.
 
 Pick an endpoint, fill the form it generates, and the reply comes back as formatted JSON
 with the rate-limit state next to it. The form is built from `src/valorant/catalog.ts`, a

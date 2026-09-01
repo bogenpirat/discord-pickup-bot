@@ -57,6 +57,41 @@ describe('playgroundPage', () => {
     expect(page).not.toMatch(/(src|href)="(https?:)?\/\//);
   });
 
+  /*
+   * The page used to fetch a bare relative 'call?…'. A relative reference
+   * resolves against the directory of the current path, so from
+   * /pickup/<secret>/valorant-playground it reached /pickup/<secret>/call and
+   * 404'd — every request from the page failed. It now builds the path itself.
+   */
+  describe('the call url it builds', () => {
+    const callUrlAt = (pathname: string): string => {
+      const [, script] = scriptsIn(html());
+      const source = /const callUrl = (\(\) => [^;]+);/.exec(script ?? '')?.[1];
+      expect(source, 'callUrl not found in the page script').toBeDefined();
+      // eslint-disable-next-line no-new-func -- evaluating the page's own snippet is the point
+      return new Function('location', `return (${source})();`)({ pathname }) as string;
+    };
+
+    it.each([
+      ['/pickup/s3cret/valorant-playground', '/pickup/s3cret/valorant-playground/call'],
+      ['/pickup/s3cret/valorant-playground/', '/pickup/s3cret/valorant-playground/call'],
+      [
+        '/proxied/pickup/s3cret/valorant-playground',
+        '/proxied/pickup/s3cret/valorant-playground/call',
+      ],
+    ])('resolves %o to %o', (pathname, expected) => {
+      expect(callUrlAt(pathname)).toBe(expected);
+    });
+
+    it('does not rely on relative resolution, which would drop the last segment', () => {
+      const pathname = '/pickup/s3cret/valorant-playground';
+      const relative = new URL('call', `http://host${pathname}`).pathname;
+
+      expect(relative).toBe('/pickup/s3cret/call');
+      expect(callUrlAt(pathname)).not.toBe(relative);
+    });
+  });
+
   // A literal `</script>` anywhere in the payload would end the block early and
   // spill the rest of the JSON into the document as text.
   it('never closes the script block from inside the embedded data', () => {

@@ -121,6 +121,18 @@ const show = (className, text) => {
   out.append(pre);
 };
 
+/*
+ * Derived from the page's own location rather than written as a relative 'call?…'.
+ * A relative reference resolves against the *directory* of the current path, so
+ * from /pickup/<secret>/valorant-playground it would reach /pickup/<secret>/call
+ * and 404. This also survives a trailing slash and any prefix a proxy adds.
+ *
+ * The trailing-slash regex uses [/] rather than \/ because this whole script is a
+ * template literal: a backslash escape would be eaten before it ever reached the
+ * browser, leaving //+$/ behind and breaking the page.
+ */
+const callUrl = () => location.pathname.replace(/[/]+$/, '') + '/call';
+
 const call = async () => {
   const entry = byId(picker.value);
   const query = new URLSearchParams({ endpoint: entry.id });
@@ -134,7 +146,7 @@ const call = async () => {
   const started = Date.now();
 
   try {
-    const response = await fetch('call?' + query.toString());
+    const response = await fetch(callUrl() + '?' + query.toString());
     const payload = await response.json();
     const elapsed = Date.now() - started;
 

@@ -60,10 +60,10 @@ const request = (path: string, client: ValorantClient, method = 'GET'): Promise<
   ]);
 };
 
-const page = (client: ValorantClient) => request(`/${SECRET}/valorant-playground`, client);
+const page = (client: ValorantClient) => request(`/pickup/${SECRET}/valorant-playground`, client);
 
 const call = (query: string, client: ValorantClient) =>
-  request(`/${SECRET}/valorant-playground/call?${query}`, client);
+  request(`/pickup/${SECRET}/valorant-playground/call?${query}`, client);
 
 const bodyOf = (response: HttpResponse): Record<string, unknown> =>
   JSON.parse(response.body) as Record<string, unknown>;
@@ -78,18 +78,20 @@ describe('the hidden path', () => {
   });
 
   it.each([
-    '/wrong-secret/valorant-playground',
-    '/valorant-playground',
-    `/${SECRET}x/valorant-playground`,
-    `/${SECRET.slice(0, -1)}/valorant-playground`,
-    `/${SECRET}/valorant-playground/other`,
-    `/${SECRET}`,
+    '/pickup/wrong-secret/valorant-playground',
+    '/pickup/valorant-playground',
+    `/pickup/${SECRET}x/valorant-playground`,
+    `/pickup/${SECRET.slice(0, -1)}/valorant-playground`,
+    `/pickup/${SECRET}/valorant-playground/other`,
+    `/pickup/${SECRET}`,
+    // Served under /pickup, alongside the calendar route, not at the root.
+    `/${SECRET}/valorant-playground`,
   ])('answers 404 for %o', async (path) => {
     expect((await request(path, spyClient().client)).status).toBe(404);
   });
 
   it('does not leak the secret in the 404 body', async () => {
-    const response = await request('/wrong/valorant-playground', spyClient().client);
+    const response = await request('/pickup/wrong/valorant-playground', spyClient().client);
 
     expect(response.body).toBe('Not found');
   });
@@ -97,13 +99,20 @@ describe('the hidden path', () => {
   it('never reaches the api for a wrong secret', async () => {
     const spy = spyClient();
 
-    await request(`/wrong/valorant-playground/call?endpoint=getVersion&affinity=eu`, spy.client);
+    await request(
+      '/pickup/wrong/valorant-playground/call?endpoint=getVersion&affinity=eu',
+      spy.client,
+    );
 
     expect(spy.calls).toEqual([]);
   });
 
   it('answers 405 for a write method', async () => {
-    const response = await request(`/${SECRET}/valorant-playground`, spyClient().client, 'POST');
+    const response = await request(
+      `/pickup/${SECRET}/valorant-playground`,
+      spyClient().client,
+      'POST',
+    );
 
     expect(response.status).toBe(405);
     expect(response.headers['Allow']).toBe('GET, HEAD');

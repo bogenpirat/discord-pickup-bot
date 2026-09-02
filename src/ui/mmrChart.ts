@@ -34,6 +34,12 @@ const LABEL_LANES: readonly number[] = [22, 34, 46];
 const LABEL_GAP = 6;
 /** Padding either side of an unrated caption, below which it is left out. */
 const CAPTION_MARGIN = 8;
+/** Clear pixels required between two per-match deltas. */
+const DELTA_GAP = 4;
+/** How far a per-match delta sits from the step it labels, at a right angle to it. */
+const DELTA_OFFSET = 11;
+/** Pixels between two matches below which their deltas are left off entirely. */
+const DELTA_MIN_SPAN = 34;
 
 const plot = {
   left: PADDING.left,
@@ -309,6 +315,83 @@ export const renderMmrChart = (series: MmrSeries, labels: MmrChartLabels): Buffe
     // won or lost one.
     canvas.disc(xFor(index), baselineFor(index), 3, COLOURS.unrated);
     canvas.disc(xFor(index), baselineFor(index), 1, COLOURS.panel);
+  }
+
+  // What each match was worth in RR, written along the step it made rather than
+  // by the marker it ended on: the delta *is* that step, and a number beside a
+  // dot in a zigzag belongs to either of the two lines meeting there.
+  //
+  // Each sits perpendicular to its own segment — above a rise, below a fall —
+  // which clears the line by the same margin however steep the segment is. A
+  // label by the marker cannot: the steeper the step, the more of it the line
+  // cuts through.
+  const taken: { left: number; right: number; top: number; bottom: number }[] = [];
+
+  const claimBox = (left: number, top: number, width: number): boolean => {
+    const box = { left, right: left + width, top, bottom: top + textHeight() };
+    const clash = taken.some(
+      (other) =>
+        box.left < other.right + DELTA_GAP &&
+        other.left < box.right + DELTA_GAP &&
+        box.top < other.bottom + 2 &&
+        other.top < box.bottom + 2,
+    );
+    if (clash) {
+      return false;
+    }
+    taken.push(box);
+    return true;
+  };
+
+  // All of them or none. Once the steps are too narrow to write on the numbers
+  // smear into each other, and keeping only the ones that happen to fit would
+  // invite the eye to read the survivors as a run of consecutive matches.
+  if (series.points.length > 1 && span >= DELTA_MIN_SPAN) {
+    for (let index = 1; index < series.points.length; index += 1) {
+      const previous = pointAt(index - 1);
+      const current = pointAt(index);
+      // Only a step between two ratings carries one. A bridge over an unrated
+      // stretch spans several matches, so a single match's delta cannot label it.
+      if (previous?.rated !== true || current?.rated !== true) {
+        continue;
+      }
+
+      const x0 = xFor(index - 1);
+      const y0 = yFor(previous.elo);
+      const x1 = xFor(index);
+      const y1 = yFor(current.elo);
+      const length = Math.hypot(x1 - x0, y1 - y0) || 1;
+      // The normal to the step, turned to the side the sign asks for.
+      const side = current.change < 0 ? -1 : 1;
+      const text = `${current.change > 0 ? '+' : ''}${current.change}`;
+      const width = textWidth(text);
+      const left = (x0 + x1) / 2 + side * ((y1 - y0) / length) * DELTA_OFFSET - width / 2;
+      const top = (y0 + y1) / 2 - side * ((x1 - x0) / length) * DELTA_OFFSET - textHeight() / 2;
+
+      // Nothing is drawn over the frame: a delta half outside the plot reads
+      // worse than a delta the reader can take off the line's shape anyway.
+      if (
+        left < plot.left ||
+        left + width > plot.right ||
+        top < plot.top ||
+        top + textHeight() > plot.bottom
+      ) {
+        continue;
+      }
+      if (!claimBox(left, top, width)) {
+        continue;
+      }
+
+      drawText(
+        canvas,
+        text,
+        left,
+        top,
+        // A match that moved nothing is neither a win nor a loss, and colouring
+        // it as one would put a green 0 next to a real gain.
+        current.change === 0 ? COLOURS.label : current.change > 0 ? COLOURS.win : COLOURS.loss,
+      );
+    }
   }
 
   // Rank changes last of all: they are the thing the chart is for.

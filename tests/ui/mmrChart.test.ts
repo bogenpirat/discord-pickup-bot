@@ -121,6 +121,39 @@ describe('renderMmrChart', () => {
     expect(() => renderMmrChart(edges, LABELS)).not.toThrow();
   });
 
+  // Elo and `last_change` are separate fields, and a refund upstream can make
+  // them disagree, so a series can hold the same path with different deltas —
+  // which is exactly what tells us whether the deltas reached the image.
+  const path = (changes: readonly number[]): MmrHistoryEntry[] =>
+    changes.map((change, index) => entry(21, 10 + index * 5, change, index * 60)).reverse();
+
+  it('writes what each match was worth when the steps are wide enough', () => {
+    const one = buildMmrSeries(path([20, 20, 20, 20, 20]));
+    const other = buildMmrSeries(path([20, 21, 22, 23, 24]));
+
+    expect(renderMmrChart(one, LABELS).equals(renderMmrChart(other, LABELS))).toBe(false);
+  });
+
+  it('leaves the deltas off once the matches are too close together to read', () => {
+    const many = Array.from({ length: 40 }, () => 20);
+    const one = buildMmrSeries(path(many));
+    const other = buildMmrSeries(path(many.map((change, index) => change + (index % 5))));
+
+    expect(renderMmrChart(one, LABELS).equals(renderMmrChart(other, LABELS))).toBe(true);
+  });
+
+  // The bridge spans however many matches went unrated, so no single match's
+  // delta can label it.
+  it('does not write a delta over a bridge across unrated matches', () => {
+    const bridged = (change: number): MmrHistoryEntry[] =>
+      [entry(21, 20, 20, 0), unrated(60), entry(21, 50, change, 120)].reverse();
+
+    const one = renderMmrChart(buildMmrSeries(bridged(25)), LABELS);
+    const other = renderMmrChart(buildMmrSeries(bridged(26)), LABELS);
+
+    expect(one.equals(other)).toBe(true);
+  });
+
   it('draws a different image when the data differs', () => {
     const fall = buildMmrSeries(
       [entry(22, 10, 0, 0), entry(21, 85, -25, 60), entry(21, 60, -25, 120)].reverse(),

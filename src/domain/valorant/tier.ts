@@ -44,6 +44,16 @@ const groupOf = (tierId: number): { group: TierGroup; division: number } | null 
 };
 
 /**
+ * Whether a tier id names a rank on the ladder.
+ *
+ * Ids below the first ranked tier are the unrated state — an account in
+ * placements, or one that has not played the act out. The API reports those
+ * with an elo of 0, which is the absence of a rating rather than a rating of
+ * zero, so anything that scales or averages elo has to ask this first.
+ */
+export const isRankedTier = (tierId: number): boolean => tierId >= FIRST_RANKED_TIER;
+
+/**
  * The full name of a tier, or null for anything off the ladder — including a
  * rank Riot might add above Radiant, which is better left unnamed than guessed.
  */

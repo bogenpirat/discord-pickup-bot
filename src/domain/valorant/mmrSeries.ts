@@ -1,3 +1,5 @@
+import { isRankedTier } from './tier.ts';
+
 /**
  * The shape this module needs out of an MMR history entry, named structurally so
  * the domain does not depend on the generated API types. Both the live and the
@@ -21,6 +23,12 @@ export interface MmrPoint {
   readonly tierName: string;
   readonly at: number;
   readonly mapName: string | null;
+  /**
+   * False while the account carried no rank. The API still answers with an
+   * `elo` of 0 for those matches, so every consumer has to read this before it
+   * reads `elo`: unrated is an undefined rating, not the bottom of the scale.
+   */
+  readonly rated: boolean;
 }
 
 /** A tier's lower edge in elo, used to draw and label the bands behind the line. */
@@ -43,6 +51,12 @@ export interface MmrSeries {
   readonly points: readonly MmrPoint[];
   readonly bands: readonly TierBand[];
   readonly changes: readonly RankChange[];
+  /**
+   * How many of `points` carried a rank. Everything below is measured across
+   * those alone, so a stretch of unrated matches neither moves the range nor
+   * counts towards the record.
+   */
+  readonly ratedCount: number;
   readonly minElo: number;
   readonly maxElo: number;
   readonly netChange: number;
@@ -55,6 +69,7 @@ export const EMPTY_SERIES: MmrSeries = {
   points: [],
   bands: [],
   changes: [],
+  ratedCount: 0,
   minElo: 0,
   maxElo: 0,
   netChange: 0,
@@ -78,6 +93,7 @@ const toPoint = (entry: MmrHistoryEntry): MmrPoint => ({
   tierName: entry.tier.name,
   at: timeOf(entry.date),
   mapName: entry.map?.name ?? null,
+  rated: isRankedTier(entry.tier.id),
 });
 
 /**
@@ -102,21 +118,31 @@ const bandsFrom = (points: readonly MmrPoint[]): readonly TierBand[] => {
   return [...byTier.values()].sort((a, b) => a.baseElo - b.baseElo);
 };
 
+/**
+ * Crossings between one ranked match and the next ranked one.
+ *
+ * Unrated matches are stepped over rather than treated as a tier of their own,
+ * so leaving and re-entering placements is not reported as a plunge to nothing
+ * and a climb back. A tier that genuinely differs either side of such a stretch
+ * still counts, marked on the match that came out of it.
+ */
 const changesIn = (points: readonly MmrPoint[]): readonly RankChange[] => {
   const changes: RankChange[] = [];
+  let previous: MmrPoint | null = null;
 
-  for (let index = 1; index < points.length; index += 1) {
-    const previous = points[index - 1];
-    const current = points[index];
-    if (previous === undefined || current === undefined || previous.tierId === current.tierId) {
+  for (const [index, current] of points.entries()) {
+    if (!current.rated) {
       continue;
     }
-    changes.push({
-      index,
-      direction: current.tierId > previous.tierId ? 'up' : 'down',
-      from: previous.tierName,
-      to: current.tierName,
-    });
+    if (previous !== null && previous.tierId !== current.tierId) {
+      changes.push({
+        index,
+        direction: current.tierId > previous.tierId ? 'up' : 'down',
+        from: previous.tierName,
+        to: current.tierName,
+      });
+    }
+    previous = current;
   }
 
   return changes;
@@ -143,24 +169,29 @@ export const buildMmrSeries = (history: readonly MmrHistoryEntry[]): MmrSeries =
     return EMPTY_SERIES;
   }
 
-  const elos = points.map((point) => point.elo);
-  const first = points[0];
+  // Everything numeric is measured over the ranked matches alone. An unrated
+  // entry carries an elo of 0, and letting that into the range or the net would
+  // report a drop of two thousand elo for a state that has no rating at all.
+  const rated = points.filter((point) => point.rated);
+  const elos = rated.map((point) => point.elo);
+  const first = rated[0];
   // `reduce` with no seed yields the last element without an index access, which
   // would otherwise widen to `| undefined`.
-  const last = points.reduce((_, point) => point);
+  const last = rated.length === 0 ? undefined : rated.reduce((_, point) => point);
 
   return {
     points,
-    bands: bandsFrom(points),
+    bands: bandsFrom(rated),
     changes: changesIn(points),
-    minElo: Math.min(...elos),
-    maxElo: Math.max(...elos),
+    ratedCount: rated.length,
+    minElo: elos.length === 0 ? 0 : Math.min(...elos),
+    maxElo: elos.length === 0 ? 0 : Math.max(...elos),
     // Measured across the window rather than by summing `last_change`, so a
     // refund or a correction upstream cannot make the total disagree with the
     // endpoints the chart actually draws.
-    netChange: last.elo - first.elo,
-    wins: points.filter((point) => point.change > 0).length,
-    losses: points.filter((point) => point.change < 0).length,
-    draws: points.filter((point) => point.change === 0).length,
+    netChange: first === undefined || last === undefined ? 0 : last.elo - first.elo,
+    wins: rated.filter((point) => point.change > 0).length,
+    losses: rated.filter((point) => point.change < 0).length,
+    draws: rated.filter((point) => point.change === 0).length,
   };
 };

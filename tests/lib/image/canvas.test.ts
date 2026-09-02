@@ -124,6 +124,25 @@ describe('createCanvas', () => {
     expect(painted(canvas)).toBeLessThan(20);
   });
 
+  it('leaves gaps in a dashed line, whichever way it runs', () => {
+    const flat = createCanvas(20, 1);
+    flat.dashedLine(0, 0, 19, 0, '#ffffff', 1, 2, 2);
+    const upright = createCanvas(1, 20);
+    upright.dashedLine(0, 0, 0, 19, '#ffffff', 1, 2, 2);
+
+    for (const canvas of [flat, upright]) {
+      expect(painted(canvas)).toBeGreaterThan(0);
+      expect(painted(canvas)).toBeLessThan(20);
+    }
+  });
+
+  it('draws a dashed line of zero length as a point', () => {
+    const canvas = createCanvas(4, 4);
+    canvas.dashedLine(2, 2, 2, 2, '#ffffff');
+
+    expect(painted(canvas)).toBe(1);
+  });
+
   it('draws a disc that is round and centred', () => {
     const canvas = createCanvas(11, 11);
     canvas.disc(5, 5, 3, '#ffffff');

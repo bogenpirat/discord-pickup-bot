@@ -10,6 +10,8 @@ const LABELS = {
   title: 'Bogenpirat#EUW · Immortal 2',
   subtitle: '3 matches · 2W 1L · +30 elo',
   empty: 'no ranked matches',
+  unrated: 'unrated',
+  unratedOnly: 'unrated across this window',
 };
 
 const baseOf = (tierId: number): number => (tierId - 3) * 100;
@@ -20,6 +22,13 @@ const entry = (tierId: number, rr: number, change: number, minutes: number): Mmr
   last_change: change,
   date: new Date(Date.parse('2026-08-01T18:00:00Z') + minutes * 60_000).toISOString(),
   tier: { id: tierId, name: tierId === 22 ? 'Immortal 2' : 'Immortal 1' },
+});
+
+/** A match the account played with no rank: tier 0, and an elo of 0 to match. */
+const unrated = (minutes: number): MmrHistoryEntry => ({
+  ...entry(0, 0, 0, minutes),
+  elo: 0,
+  tier: { id: 0, name: 'Unrated' },
 });
 
 const SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -76,6 +85,40 @@ describe('renderMmrChart', () => {
     );
 
     expect(() => renderMmrChart(long, LABELS)).not.toThrow();
+  });
+
+  it('draws an unrated stretch differently from a rated one', () => {
+    const withGap = buildMmrSeries(
+      [entry(21, 60, 0, 0), unrated(60), entry(21, 85, 25, 120)].reverse(),
+    );
+    const withoutGap = buildMmrSeries(
+      [entry(21, 60, 0, 0), entry(21, 70, 10, 60), entry(21, 85, 15, 120)].reverse(),
+    );
+
+    expect(renderMmrChart(withGap, LABELS).equals(renderMmrChart(withoutGap, LABELS))).toBe(false);
+  });
+
+  // The bug this guards: an unrated elo of 0 dragged the line to the floor, so
+  // the same ranked matches drew differently depending on what sat between them.
+  it('draws the rated matches the same whether or not an unrated one follows', () => {
+    const withTrailing = buildMmrSeries([entry(21, 60, 0, 0), unrated(60)].reverse());
+    const withoutTrailing = buildMmrSeries([entry(21, 60, 0, 0)]);
+
+    expect(withTrailing.minElo).toBe(withoutTrailing.minElo);
+    expect(withTrailing.maxElo).toBe(withoutTrailing.maxElo);
+  });
+
+  it('handles a window in which nothing was rated', () => {
+    const none = buildMmrSeries([unrated(0), unrated(60), unrated(120)].reverse());
+
+    expect(() => renderMmrChart(none, LABELS)).not.toThrow();
+    expect(renderMmrChart(none, LABELS).equals(renderMmrChart(EMPTY_SERIES, LABELS))).toBe(false);
+  });
+
+  it('handles a window that opens and closes unrated', () => {
+    const edges = buildMmrSeries([unrated(0), entry(21, 60, 0, 60), unrated(120)].reverse());
+
+    expect(() => renderMmrChart(edges, LABELS)).not.toThrow();
   });
 
   it('draws a different image when the data differs', () => {

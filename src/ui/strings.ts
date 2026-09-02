@@ -90,6 +90,10 @@ export interface Strings {
   readonly eloLeaderboardLabel: string;
   readonly eloRecord: (parts: EloRecordParts) => string;
   readonly eloNoHistory: string;
+  /** Caption drawn over an unrated stretch of the chart. Kept to one short word. */
+  readonly eloUnrated: string;
+  /** Drawn across the chart when no match in the window carried a rank. */
+  readonly eloUnratedOnly: string;
   readonly eloNoRankedData: (riotId: string) => string;
   readonly valorantRiotIdAdminOnly: string;
   readonly matchTitle: (map: string, outcome: string) => string;
@@ -117,11 +121,14 @@ export interface MatchStatParts {
 }
 
 export interface EloRecordParts {
+  /** Ranked matches only — the ones the record and the net are measured over. */
   readonly matches: number;
   readonly wins: number;
   readonly losses: number;
   /** Already signed, e.g. `+164`. */
   readonly net: string;
+  /** Matches in the same window that the account played with no rank. */
+  readonly unrated: number;
 }
 
 export interface RiotAccountParts {
@@ -268,8 +275,12 @@ const de: Strings = {
   eloPeakValue: (tier, season) => `${tier} (${season})`,
   eloLeaderboardLabel: 'Leaderboard',
   eloRecord: (parts) =>
-    `${parts.matches} Matches · ${parts.wins}S ${parts.losses}N · ${parts.net} Elo`,
+    `${parts.matches} Matches · ${parts.wins}S ${parts.losses}N · ${parts.net} Elo${
+      parts.unrated === 0 ? '' : ` · ${parts.unrated} ohne Wertung`
+    }`,
   eloNoHistory: 'keine gewerteten Matches gefunden',
+  eloUnrated: 'ohne Wertung',
+  eloUnratedOnly: 'in diesem Zeitraum ohne Wertung',
   eloNoRankedData: (riotId) =>
     `Für **${riotId}** liegen keine Ranglisten-Daten vor. Vielleicht wurde die Platzierung noch nicht gespielt.`,
   valorantRiotIdAdminOnly:
@@ -391,8 +402,12 @@ const en: Strings = {
   eloPeakValue: (tier, season) => `${tier} (${season})`,
   eloLeaderboardLabel: 'Leaderboard',
   eloRecord: (parts) =>
-    `${parts.matches} matches · ${parts.wins}W ${parts.losses}L · ${parts.net} elo`,
+    `${parts.matches} matches · ${parts.wins}W ${parts.losses}L · ${parts.net} elo${
+      parts.unrated === 0 ? '' : ` · ${parts.unrated} unrated`
+    }`,
   eloNoHistory: 'no ranked matches found',
+  eloUnrated: 'unrated',
+  eloUnratedOnly: 'unrated across this window',
   eloNoRankedData: (riotId) =>
     `No ranked data for **${riotId}**. They may not have played placements yet.`,
   valorantRiotIdAdminOnly:

@@ -62,10 +62,14 @@ const summaryLine = (series: MmrSeries, strings: Strings): string =>
   series.points.length === 0
     ? strings.eloNoHistory
     : strings.eloRecord({
-        matches: series.points.length,
+        // Ranked matches only: an unrated match has no result the API will name
+        // and no elo behind it, so counting it towards the record would put a
+        // number next to a stretch the chart deliberately leaves undrawn.
+        matches: series.ratedCount,
         wins: series.wins,
         losses: series.losses,
         net: changeText(series.netChange),
+        unrated: series.points.length - series.ratedCount,
       });
 
 const buildEmbed = (
@@ -173,6 +177,8 @@ const executeFor =
       title: `${resolved.label} · ${rank.value.current.tier.name}`,
       subtitle: summaryLine(series, strings),
       empty: strings.eloNoHistory,
+      unrated: strings.eloUnrated,
+      unratedOnly: strings.eloUnratedOnly,
     });
 
     await interaction.editReply({

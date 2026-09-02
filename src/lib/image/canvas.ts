@@ -36,6 +36,21 @@ export interface Canvas {
   line(x0: number, y0: number, x1: number, y1: number, colour: Colour, weight?: number): void;
   /** A horizontal run of `on` pixels every `on + off`, for gridlines. */
   dashedRow(y: number, x0: number, x1: number, colour: Colour, on?: number, off?: number): void;
+  /**
+   * `line`, broken into `on` pixels every `on + off` along its length. Reads as
+   * "the path between these two points is not measured", where a solid line
+   * would claim it was.
+   */
+  dashedLine(
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+    colour: Colour,
+    weight?: number,
+    on?: number,
+    off?: number,
+  ): void;
   disc(cx: number, cy: number, radius: number, colour: Colour): void;
   /** An upward triangle when `up`, a downward one otherwise. */
   triangle(cx: number, cy: number, radius: number, up: boolean, colour: Colour): void;
@@ -147,6 +162,28 @@ export const createCanvas = (width: number, height: number): Canvas => {
         if ((x - Math.round(x0)) % (on + off) < on) {
           set(x, y, rgba);
         }
+      }
+    },
+
+    dashedLine: (x0, y0, x1, y1, colour, weight = 1, on = 5, off = 5) => {
+      const dx = x1 - x0;
+      const dy = y1 - y0;
+      const length = Math.hypot(dx, dy);
+      if (length === 0) {
+        line(x0, y0, x1, y1, colour, weight);
+        return;
+      }
+
+      for (let start = 0; start < length; start += on + off) {
+        const end = Math.min(length, start + on);
+        line(
+          x0 + (dx * start) / length,
+          y0 + (dy * start) / length,
+          x0 + (dx * end) / length,
+          y0 + (dy * end) / length,
+          colour,
+          weight,
+        );
       }
     },
 

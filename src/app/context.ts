@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { type AuditTrail, createDisabledAuditTrail } from '../audit/trail.ts';
 import {
   createGuildSettingsRepository,
   type GuildSettingsRepository,
@@ -33,6 +34,8 @@ export interface AppContext {
   readonly riotAccounts: RiotAccountRepository;
   readonly mutex: KeyedMutex;
   readonly logger: Logger;
+  /** Records what members trigger. Disabled unless an audit log path is configured. */
+  readonly audit: AuditTrail;
   readonly powerUserIds: readonly string[];
   /** Public origin of the bot's HTTP server, or null when it is not configured. */
   readonly publicBaseUrl: string | null;
@@ -52,6 +55,7 @@ export const createAppContext = (
   powerUserIds: readonly string[] = [],
   publicBaseUrl: string | null = null,
   valorant: ValorantClient | null = null,
+  audit: AuditTrail = createDisabledAuditTrail(),
 ): AppContext => ({
   db,
   settings: createGuildSettingsRepository(db),
@@ -61,6 +65,7 @@ export const createAppContext = (
   riotAccounts: createRiotAccountRepository(db),
   mutex: createKeyedMutex(),
   logger,
+  audit,
   powerUserIds,
   publicBaseUrl,
   valorant,

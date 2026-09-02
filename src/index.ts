@@ -3,6 +3,8 @@ import { dirname } from 'node:path';
 import { Events } from 'discord.js';
 import { createAppContext } from './app/context.ts';
 import { buildButtonRegistry, buildCommandRegistry } from './app/registries.ts';
+import { createAuditFileSink } from './audit/file.ts';
+import { createAuditTrail, createDisabledAuditTrail } from './audit/trail.ts';
 import { loadEnv } from './config/env.ts';
 import { openDatabase } from './db/database.ts';
 import { createClient } from './discord/client.ts';
@@ -25,6 +27,19 @@ mkdirSync(dirname(env.DATABASE_PATH), { recursive: true });
 
 const db = openDatabase(env.DATABASE_PATH);
 
+// Built before the API client so the client can hand it every request it makes.
+const audit =
+  env.AUDIT_LOG_PATH === undefined
+    ? createDisabledAuditTrail()
+    : createAuditTrail({ write: createAuditFileSink(env.AUDIT_LOG_PATH, logger) });
+
+logger.info(
+  env.AUDIT_LOG_PATH === undefined
+    ? { enabled: false }
+    : { enabled: true, path: env.AUDIT_LOG_PATH },
+  'audit log',
+);
+
 // Without a key the bot still runs its pickup duties; the Valorant commands are
 // registered either way and refuse at call time, because command registration
 // happens in a separate process that has no access to this context.
@@ -34,6 +49,7 @@ const valorant: ValorantClient | null =
     : createValorantClient({
         apiKey: env.VALORANT_API_KEY,
         limiter: createRateLimiter({ limit: env.VALORANT_RATE_LIMIT_PER_MINUTE }),
+        onRequest: audit.addApiCall,
       });
 
 logger.info(
@@ -49,6 +65,7 @@ const context = createAppContext(
   env.POWER_USER_IDS,
   env.PUBLIC_BASE_URL ?? null,
   valorant,
+  audit,
 );
 const commands = buildCommandRegistry();
 const buttons = buildButtonRegistry();

@@ -29,6 +29,17 @@ describe('loadEnv', () => {
     expect(env.NODE_ENV).toBe('development');
   });
 
+  it('records no audit log unless a path is given', () => {
+    expect(loadEnv(minimal).AUDIT_LOG_PATH).toBeUndefined();
+    expect(loadEnv({ ...minimal, AUDIT_LOG_PATH: '' }).AUDIT_LOG_PATH).toBeUndefined();
+  });
+
+  it('keeps the audit log path it was given', () => {
+    expect(loadEnv({ ...minimal, AUDIT_LOG_PATH: '/audit/audit.log' }).AUDIT_LOG_PATH).toBe(
+      '/audit/audit.log',
+    );
+  });
+
   it('has no power users by default', () => {
     expect(loadEnv(minimal).POWER_USER_IDS).toEqual([]);
   });

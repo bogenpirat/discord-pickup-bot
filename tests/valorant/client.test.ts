@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { AuditApiCall } from '../../src/audit/types.ts';
 import { createRateLimiter, type RateLimiter } from '../../src/lib/rateLimiter.ts';
 import { createValorantClient, type ValorantClient } from '../../src/valorant/client.ts';
 import type {
@@ -69,6 +70,8 @@ interface Harness {
   readonly calls: Recorded[];
   readonly slept: number[];
   readonly limiter: RateLimiter;
+  /** What the client reported for the audit trail, one per logical request. */
+  readonly requests: AuditApiCall[];
 }
 
 const START = 5_000;
@@ -89,6 +92,8 @@ const harness = (responses: readonly StubResponse[], maxRetries = 3): Harness =>
     },
   });
 
+  const requests: AuditApiCall[] = [];
+
   const client = createValorantClient({
     apiKey: 'HDEV-test-key',
     limiter,
@@ -99,9 +104,12 @@ const harness = (responses: readonly StubResponse[], maxRetries = 3): Harness =>
       slept.push(ms);
       clock += ms;
     },
+    onRequest: (call) => {
+      requests.push(call);
+    },
   });
 
-  return { client, calls, slept, limiter };
+  return { client, calls, slept, limiter, requests };
 };
 
 describe('createValorantClient', () => {
@@ -556,5 +564,110 @@ describe('endpoint routing', () => {
     const { client, calls } = harness([okBody({})]);
     await call(client);
     expect(calls[0]?.init.method).toBe(method);
+  });
+});
+
+describe('createValorantClient request reporting', () => {
+  it('reports a successful request once', async () => {
+    const { client, requests } = harness([okBody({ puuid: 'p' })]);
+
+    await client.getAccount('Foo', 'EUW');
+
+    expect(requests).toEqual([
+      {
+        method: 'GET',
+        path: '/valorant/v2/account/Foo/EUW',
+        status: 200,
+        attempts: 1,
+        durationMs: 0,
+      },
+    ]);
+  });
+
+  it('reports the query it was sent with, minus the options left unset', async () => {
+    const { client, requests } = harness([okBody({ puuid: 'p' })]);
+
+    await client.getAccount('Foo', 'EUW', { force: true });
+
+    expect(requests[0]?.query).toEqual({ force: true });
+  });
+
+  it('leaves the query out when there is none', async () => {
+    const { client, requests } = harness([okBody({ puuid: 'p' })]);
+
+    await client.getAccount('Foo', 'EUW');
+
+    expect(requests[0]).not.toHaveProperty('query');
+  });
+
+  it('folds retries into one report and counts the attempts', async () => {
+    const { client, requests } = harness([
+      { status: 500 },
+      { status: 500 },
+      okBody({ puuid: 'p' }),
+    ]);
+
+    await client.getAccount('Foo', 'EUW');
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({ status: 200, attempts: 3 });
+  });
+
+  it('counts the backoff it waited through as part of the duration', async () => {
+    const { client, requests } = harness([{ status: 500 }, okBody({ puuid: 'p' })]);
+
+    await client.getAccount('Foo', 'EUW');
+
+    expect(requests[0]?.durationMs).toBeGreaterThan(0);
+  });
+
+  it('reports the failure kind of a request that gave up', async () => {
+    const { client, requests } = harness([{ status: 500 }], 1);
+
+    await client.getAccount('Foo', 'EUW');
+
+    expect(requests).toEqual([
+      expect.objectContaining({ status: 500, attempts: 2, error: 'network' }),
+    ]);
+  });
+
+  it('reports a request that was rejected outright', async () => {
+    const { client, requests } = harness([{ status: 404 }]);
+
+    await client.getAccount('Foo', 'EUW');
+
+    expect(requests[0]).toMatchObject({ status: 404, attempts: 1, error: 'not-found' });
+  });
+
+  it('reports no status when nothing ever answered', async () => {
+    const { client, requests } = harness([{ networkError: true }], 0);
+
+    await client.getAccount('Foo', 'EUW');
+
+    expect(requests[0]).toMatchObject({ status: 0, attempts: 1, error: 'network' });
+  });
+
+  it('reports the method and path of a request that carries a body', async () => {
+    const { client, requests } = harness([okBody({ ok: true })]);
+
+    await client.addWebhookUser({ name: 'Foo', tag: 'EUW' });
+
+    expect(requests[0]).toMatchObject({
+      method: 'POST',
+      path: '/public/v1/premium/webhook/users',
+    });
+    // Bodies are deliberately never reported.
+    expect(requests[0]).not.toHaveProperty('body');
+  });
+
+  it('says nothing when no reporter was given', async () => {
+    const { fetchImpl } = stubFetch([okBody({ puuid: 'p' })]);
+    const client = createValorantClient({
+      apiKey: 'HDEV-test-key',
+      limiter: createRateLimiter({ limit: 30 }),
+      fetchImpl,
+    });
+
+    await expect(client.getAccount('Foo', 'EUW')).resolves.toMatchObject({ ok: true });
   });
 });

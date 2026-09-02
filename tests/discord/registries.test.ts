@@ -10,6 +10,7 @@ import {
   createFakeButtonInteraction,
   createFakeCommandInteraction,
   createTestContext,
+  recordingAuditTrail,
 } from '../helpers/fakes.ts';
 
 const stubCommand = (overrides: Partial<SlashCommand> = {}): SlashCommand => ({
@@ -266,5 +267,223 @@ describe('replyEphemeral', () => {
     await replyEphemeral(asRepliable(fake), 'first');
     await replyEphemeral(asRepliable(fake), 'second');
     expect(fake.calls.map((call) => call.method)).toEqual(['reply', 'followUp']);
+  });
+});
+
+describe('auditing a dispatch', () => {
+  const auditedContext = () => {
+    const trail = recordingAuditTrail();
+    return { trail, context: createTestContext(undefined, [], null, trail.audit) };
+  };
+
+  it('records the command that ran', async () => {
+    const { trail, context } = auditedContext();
+    const registry = createCommandRegistry([stubCommand()]);
+
+    await registry.dispatch(
+      createFakeCommandInteraction({
+        commandName: 'pickup',
+        userId: 'user-7',
+        strings: { info: 'ranked tonight' },
+      }).interaction,
+      context,
+    );
+
+    expect(trail.entries()).toMatchObject([
+      {
+        kind: 'command',
+        command: 'pickup',
+        userId: 'user-7',
+        options: { info: 'ranked tonight' },
+        outcome: 'ok',
+        apiCalls: [],
+      },
+    ]);
+  });
+
+  it('records a command that threw, alongside the friendly reply', async () => {
+    const { trail, context } = auditedContext();
+    const registry = createCommandRegistry([
+      stubCommand({
+        execute: async () => {
+          throw new Error('boom');
+        },
+      }),
+    ]);
+    const fake = createFakeCommandInteraction({ commandName: 'pickup' });
+
+    await registry.dispatch(fake.interaction, context);
+
+    expect(trail.entries()[0]).toMatchObject({ outcome: 'error', error: 'boom' });
+    expect(fake.messages().join()).not.toBe('');
+  });
+
+  it('records nothing for a command that does not exist', async () => {
+    const { trail, context } = auditedContext();
+    const registry = createCommandRegistry([stubCommand()]);
+
+    await registry.dispatch(
+      createFakeCommandInteraction({ commandName: 'ghost' }).interaction,
+      context,
+    );
+
+    expect(trail.lines).toEqual([]);
+  });
+
+  it('records nothing for autocomplete', async () => {
+    const { trail, context } = auditedContext();
+    const registry = createCommandRegistry([stubCommand({ autocomplete: async () => undefined })]);
+
+    await registry.dispatchAutocomplete(
+      createFakeCommandInteraction({ commandName: 'pickup' }).interaction as never,
+      context,
+    );
+
+    expect(trail.lines).toEqual([]);
+  });
+
+  it('records a button click with the choice behind it', async () => {
+    const { trail, context } = auditedContext();
+    const registry = createButtonRegistry({
+      respond: async () => undefined,
+      close: async () => undefined,
+    });
+
+    await registry.dispatch(
+      createFakeButtonInteraction({ customId: encodeRespond('out', 4) }).interaction,
+      context,
+    );
+
+    expect(trail.entries()).toMatchObject([
+      { kind: 'button', action: 'respond', choice: 'out', pickupId: 4, outcome: 'ok' },
+    ]);
+  });
+
+  it('records a button handler that threw', async () => {
+    const { trail, context } = auditedContext();
+    const registry = createButtonRegistry({
+      respond: async () => undefined,
+      close: async () => {
+        throw new Error('nope');
+      },
+    });
+
+    await registry.dispatch(
+      createFakeButtonInteraction({ customId: encodeClose(4) }).interaction,
+      context,
+    );
+
+    expect(trail.entries()[0]).toMatchObject({ action: 'close', outcome: 'error', error: 'nope' });
+  });
+
+  it('records nothing for a custom id it cannot decode', async () => {
+    const { trail, context } = auditedContext();
+    const registry = createButtonRegistry({
+      respond: async () => undefined,
+      close: async () => undefined,
+    });
+
+    await registry.dispatch(
+      createFakeButtonInteraction({ customId: 'pickup:respond:nonsense' }).interaction,
+      context,
+    );
+
+    expect(trail.lines).toEqual([]);
+  });
+
+  it('lists the api calls a command made underneath it', async () => {
+    const { trail, context } = auditedContext();
+    const registry = createCommandRegistry([
+      stubCommand({
+        execute: async (_interaction, ctx) => {
+          // Stands in for the Valorant client, which reports through this hook.
+          ctx.audit.addApiCall({
+            method: 'GET',
+            path: '/valorant/v2/account/Foo/EUW',
+            status: 200,
+            attempts: 1,
+            durationMs: 12,
+          });
+          await Promise.resolve();
+          ctx.audit.addApiCall({
+            method: 'GET',
+            path: '/valorant/v3/mmr/eu/pc/Foo/EUW',
+            status: 200,
+            attempts: 1,
+            durationMs: 30,
+          });
+        },
+      }),
+    ]);
+
+    await registry.dispatch(
+      createFakeCommandInteraction({ commandName: 'pickup' }).interaction,
+      context,
+    );
+
+    expect(trail.entries()[0]?.apiCalls.map((call) => call.path)).toEqual([
+      '/valorant/v2/account/Foo/EUW',
+      '/valorant/v3/mmr/eu/pc/Foo/EUW',
+    ]);
+  });
+
+  it('gives concurrent commands their own list of api calls', async () => {
+    const { trail, context } = auditedContext();
+    const registry = createCommandRegistry([
+      stubCommand({
+        name: 'slow',
+        execute: async (_interaction, ctx) => {
+          ctx.audit.addApiCall({
+            method: 'GET',
+            path: '/slow',
+            status: 200,
+            attempts: 1,
+            durationMs: 1,
+          });
+          await new Promise((resolve) => {
+            setTimeout(resolve, 5);
+          });
+          ctx.audit.addApiCall({
+            method: 'GET',
+            path: '/slow-again',
+            status: 200,
+            attempts: 1,
+            durationMs: 1,
+          });
+        },
+      }),
+      stubCommand({
+        name: 'quick',
+        execute: async (_interaction, ctx) => {
+          ctx.audit.addApiCall({
+            method: 'GET',
+            path: '/quick',
+            status: 200,
+            attempts: 1,
+            durationMs: 1,
+          });
+        },
+      }),
+    ]);
+
+    await Promise.all([
+      registry.dispatch(createFakeCommandInteraction({ commandName: 'slow' }).interaction, context),
+      registry.dispatch(
+        createFakeCommandInteraction({ commandName: 'quick' }).interaction,
+        context,
+      ),
+    ]);
+
+    const paths = new Map(
+      trail
+        .entries()
+        .flatMap((entry) =>
+          entry.kind === 'command'
+            ? [[entry.command, entry.apiCalls.map((call) => call.path)] as const]
+            : [],
+        ),
+    );
+    expect(paths.get('slow')).toEqual(['/slow', '/slow-again']);
+    expect(paths.get('quick')).toEqual(['/quick']);
   });
 });

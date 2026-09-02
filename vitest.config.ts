@@ -11,6 +11,7 @@ export default defineConfig({
       exclude: ['src/index.ts', 'src/scripts/**', 'src/types/**', 'src/valorant/generated/**'],
       thresholds: {
         'src/domain/**': { lines: 100, branches: 100, functions: 100, statements: 100 },
+        'src/audit/**': { lines: 90, branches: 90, functions: 90, statements: 90 },
         'src/db/**': { lines: 90, branches: 90, functions: 90, statements: 90 },
         'src/ui/**': { lines: 90, branches: 90, functions: 90, statements: 90 },
         'src/lib/**': { lines: 90, branches: 90, functions: 90, statements: 90 },

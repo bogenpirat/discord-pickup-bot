@@ -42,6 +42,10 @@ const schema = z.object({
     .regex(/^[A-Za-z0-9_-]+$/, 'must be url-safe: letters, digits, dot-free, - or _')
     .optional(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  // Where to append the audit log, one JSON line per slash command or button
+  // click. Blank or absent records nothing. Under Docker this points into a
+  // bind-mounted directory so the record outlives the container.
+  AUDIT_LOG_PATH: z.string().min(1).optional(),
   HEARTBEAT_PATH: z.string().min(1).default('/tmp/heartbeat'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('production'),
 });

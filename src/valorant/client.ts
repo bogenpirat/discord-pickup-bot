@@ -1,8 +1,10 @@
+import type { AuditApiCall } from '../audit/types.ts';
 import { isRetryable, parseDelaySeconds, retryDelayMs } from '../domain/valorant/backoff.ts';
 import type { RateLimiter } from '../lib/rateLimiter.ts';
 import { err, ok, type Result } from '../lib/result.ts';
 import {
   type Affinity,
+  definedQuery,
   type Platform,
   parseApiErrors,
   type Query,
@@ -78,6 +80,12 @@ export interface ValorantClientOptions {
   readonly timeoutMs?: number;
   readonly now?: () => number;
   readonly sleep?: (ms: number) => Promise<void>;
+  /**
+   * Called once per logical request, after any retries have played out. The
+   * client neither knows nor cares what is on the other end, which is what keeps
+   * the audit trail's request-scoping out of here.
+   */
+  readonly onRequest?: (call: AuditApiCall) => void;
 }
 
 export interface MatchQuery {
@@ -304,7 +312,7 @@ interface RequestSpec {
 
 /** How one attempt ended, before the retry loop decides what to do about it. */
 type Attempt<T> =
-  | { readonly outcome: 'done'; readonly result: ValorantResult<T> }
+  | { readonly outcome: 'done'; readonly status: number; readonly result: ValorantResult<T> }
   | {
       readonly outcome: 'retry';
       readonly status: number;
@@ -320,6 +328,7 @@ export const createValorantClient = (options: ValorantClientOptions): ValorantCl
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const now = options.now ?? Date.now;
   const sleep = options.sleep ?? defaultSleep;
+  const onRequest = options.onRequest;
 
   let requests = 0;
   let failures = 0;
@@ -370,31 +379,58 @@ export const createValorantClient = (options: ValorantClientOptions): ValorantCl
     }
 
     if (response.ok) {
-      return { outcome: 'done', result: await read(response) };
+      return { outcome: 'done', status: response.status, result: await read(response) };
     }
     if (isRetryable(response.status)) {
       return { outcome: 'retry', status: response.status, response };
     }
-    return { outcome: 'done', result: err(await toError(response)) };
+    return { outcome: 'done', status: response.status, result: err(await toError(response)) };
   };
 
   const execute = async <T>(
     spec: RequestSpec,
     read: ReadResponse<T>,
   ): Promise<ValorantResult<T>> => {
+    const startedAt = now();
     let lastStatus = 0;
+    let attempts = 0;
+
+    /**
+     * One record per logical request rather than per attempt, so `durationMs`
+     * answers the question a reader of the audit log actually has — how long the
+     * command waited — and folds rate-limiter queueing and backoff into it.
+     * Request bodies are deliberately left out.
+     */
+    const finish = (result: ValorantResult<T>): ValorantResult<T> => {
+      // Endpoints with optional parameters pass a query whose every value may be
+      // undefined, which reaches the wire as no query string at all. Reporting it
+      // as an empty object would describe a request nobody made.
+      const query = spec.query === undefined ? {} : definedQuery(spec.query);
+
+      onRequest?.({
+        method: spec.method,
+        path: spec.path,
+        ...(Object.keys(query).length === 0 ? {} : { query }),
+        status: lastStatus,
+        attempts,
+        durationMs: now() - startedAt,
+        ...(result.ok ? {} : { error: result.error.kind }),
+      });
+      return result;
+    };
 
     for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+      attempts += 1;
       const step = await runAttempt(spec, read);
+      lastStatus = step.status;
 
       if (step.outcome === 'done') {
         if (!step.result.ok) {
           failures += 1;
         }
-        return step.result;
+        return finish(step.result);
       }
 
-      lastStatus = step.status;
       const headers = step.response?.headers;
       const delay = retryDelayMs({
         attempt,
@@ -418,7 +454,7 @@ export const createValorantClient = (options: ValorantClientOptions): ValorantCl
     }
 
     failures += 1;
-    return err(lastStatus === 429 ? { kind: 'rate-limited' } : { kind: 'network' });
+    return finish(err(lastStatus === 429 ? { kind: 'rate-limited' } : { kind: 'network' }));
   };
 
   const readJson = async <T>(response: ValorantResponse): Promise<ValorantResult<T>> => {

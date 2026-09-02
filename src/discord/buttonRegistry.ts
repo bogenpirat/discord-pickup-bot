@@ -1,5 +1,6 @@
 import type { ButtonInteraction } from 'discord.js';
 import type { AppContext } from '../app/context.ts';
+import { describeButton } from '../audit/subject.ts';
 import { resolveLocale, stringsFor } from '../ui/strings.ts';
 import { decodeCustomId } from './customId.ts';
 import { replyEphemeral } from './reply.ts';
@@ -19,13 +20,16 @@ export const createButtonRegistry = (handlers: ButtonHandlers): ButtonRegistry =
       return;
     }
 
+    const action = decoded.value;
+
     try {
-      const action = decoded.value;
-      if (action.action === 'respond') {
-        await handlers.respond(interaction, action, context);
-        return;
-      }
-      await handlers.close(interaction, action, context);
+      await context.audit.record(describeButton(interaction, action), async () => {
+        if (action.action === 'respond') {
+          await handlers.respond(interaction, action, context);
+          return;
+        }
+        await handlers.close(interaction, action, context);
+      });
     } catch (error) {
       context.logger.error(
         { err: error, customId: interaction.customId },

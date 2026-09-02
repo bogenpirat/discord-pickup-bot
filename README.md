@@ -455,6 +455,73 @@ changing `HTTP_PORT` in `.env` moves the container port and the host port togeth
 listens on it unless `PUBLIC_BASE_URL` is set. The health check is unrelated to the web
 server — it probes a heartbeat file, not the port.
 
+## The audit log
+
+Every slash command and every button click is appended to `audit.log` as one line of JSON,
+listing the Valorant API requests that interaction caused. `docker-compose.yml` bind-mounts
+`./audit` into the container, so the record sits next to `docker-compose.yml` on the host
+and outlives any `docker compose down`.
+
+On Linux, create the directory before the first start — Docker would otherwise create it
+owned by root, and the container runs as uid 1000:
+
+```sh
+mkdir -p audit && sudo chown 1000:1000 audit
+```
+
+Docker Desktop on Windows and macOS remaps ownership, so there the directory needs nothing.
+If the log is ever unwritable the bot logs one warning and carries on serving commands; it
+never fails an interaction over an audit entry.
+
+Outside Docker the log is off unless `AUDIT_LOG_PATH` is set.
+
+One line, wrapped here for reading:
+
+```json
+{
+  "ts": "2026-09-02T18:41:07.223Z", "v": 1, "kind": "command", "command": "elo",
+  "guildId": "1234", "channelId": "9876", "userId": "4242", "user": "julian",
+  "locale": "de", "options": { "riot-id": "Foo#EUW" },
+  "outcome": "ok", "durationMs": 842,
+  "apiCalls": [
+    { "method": "GET", "path": "/valorant/v2/account/Foo/EUW",
+      "query": { "force": true }, "status": 200, "attempts": 1, "durationMs": 310 },
+    { "method": "GET", "path": "/valorant/v3/mmr/eu/pc/Foo/EUW",
+      "status": 200, "attempts": 1, "durationMs": 404 }
+  ]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `ts` | When the interaction started, not when the line was written |
+| `v` | Schema version, so a reader can tell old lines from new ones |
+| `kind` | `command` or `button` |
+| `command`, `subcommand`, `options` | Commands only. `subcommand` is absent when there is none |
+| `action`, `pickupId`, `choice` | Buttons only. `choice` is absent on a close |
+| `outcome` | `ok`, or `error` with the thrown message in `error` |
+| `apiCalls[].attempts` | Wire attempts, so `3` means it was retried twice |
+| `apiCalls[].durationMs` | The whole request, including rate-limiter queueing and backoff |
+| `apiCalls[].status` | Status of the last attempt, or `0` when nothing ever answered |
+| `apiCalls[].error` | The `ValorantError` kind, absent when the call succeeded |
+
+Request bodies and headers are never written, so the API key cannot reach the file. Requests
+the bot makes on its own — the content dump it loads at startup, the Steam watcher, the API
+playground — belong to no interaction and are not recorded.
+
+Reading it:
+
+```sh
+tail -f audit/audit.log | jq -c              # follow along
+jq -c 'select(.userId == "4242")' audit/audit.log
+jq -r 'select(.apiCalls | length > 0) | .command' audit/audit.log | sort | uniq -c | sort -rn
+jq -c 'select(.outcome == "error")' audit/audit.log
+jq -c 'select(.apiCalls[]?.attempts > 1)' audit/audit.log   # what got retried
+```
+
+Nothing rotates the file. It is one short line per interaction, so a busy month is a few
+megabytes; point `logrotate` at it if that ever stops being true.
+
 ## Local development
 
 Requires Node 26+ (for `node:sqlite` and `Temporal`, both used without any dependency).
@@ -511,6 +578,44 @@ Riot ID is stored as its **PUUID** (`riot_accounts`), because that is the identi
 survives an account rename; the name and tag are cached alongside it and refreshed by
 `/valo-account aktualisieren`.
 
+### Naming the ids
+
+Much of what the API answers with is a bare uuid: a player's card and title, the act a peak
+rank was set in, the weapon behind a kill, the ceremony a round ended with. The only place
+those are named is `GET /valorant/v1/content`, a dump of the game build's entities.
+
+`src/valorant/contentCatalog.ts` reads it **once**, just after the gateway handshake, and
+`src/domain/valorant/content.ts` turns it into a lookup table — by id, and by asset path,
+which is how the raw endpoints name maps and game modes. The dump describes the *build*, so
+it goes stale with a patch rather than with a match; re-reading it per command would spend
+the rate limit on data that has not moved.
+
+```ts
+context.content.findIn('playerCards', player.customization.card)?.name;
+context.content.seasonLabel(mmr.peak.season.id);   // "V26 · AKT V", where the API said "e11a5"
+context.content.ceremony(round.ceremony)?.name;    // "CeremonyFlawless" -> "MAKELLOS"
+context.content.find('/Game/Maps/Jam/Jam')?.name;  // "Lotus", for the raw endpoints
+```
+
+Two things about it are worth knowing. The dump is **localised per request**, so one call
+answers for one language: the bot asks for `de-DE` and every name it resolves is German —
+a second language means a second dump, keyed by locale, not a translation of this one. And
+it is entirely optional: before it has loaded, without an API key, or if the call fails,
+every lookup answers `null` and each call site falls back to what the API sent — the short
+season code, or the id itself. Nothing waits on it and nothing fails with it.
+
+Not everything resolves. Level borders, party ids, team ids and puuids are not in the dump,
+and the competitive tier is a ladder position rather than an entity — `src/domain/valorant/tier.ts`
+names those.
+
+The dump names entities but does not picture them, and Riot publishes no image endpoint.
+`src/domain/valorant/media.ts` builds artwork URLs on `media.valorant-api.com`, the community
+mirror HenrikDev's own v1 account endpoint answers with — so `/valo-account verknüpfen`
+shows the linked account's player card as a thumbnail without spending a second request, and
+captions it with the card's name when the dump has been read. Ids are checked against a uuid
+pattern before they go into a URL Discord will fetch; an id the mirror does not have costs
+the picture and nothing else.
+
 ### The rank chart
 
 `/elo` draws its chart in-process and attaches it to the reply, so it needs no web server and
@@ -552,7 +657,8 @@ already forwards `/pickup/*` to the bot needs no extra rule. The exact URL is pr
 at startup — `docker compose logs bot | grep playground`.
 
 Pick an endpoint, fill the form it generates, and the reply comes back as formatted JSON
-with the rate-limit state next to it. The form is built from `src/valorant/catalog.ts`, a
+with the rate-limit state next to it, and above it every id in the answer that the content
+dump can name — which is most of what makes a raw payload unreadable. The form is built from `src/valorant/catalog.ts`, a
 declarative description of every endpoint whose `invoke` calls the real typed client method
 — so an endpoint added to the client and the catalog shows up in the playground with no page
 changes. The crosshair endpoint renders its PNG instead of printing bytes.
@@ -583,6 +689,7 @@ src/commands/   one file per slash command
 src/buttons/    one file per button action
 src/valorant/   HenrikDev API client, with types generated from its OpenAPI spec
 src/lib/image/  a small PNG encoder and rasterizer, used to draw the /elo chart
+src/audit/      one record per interaction: its scope, its shape, its file sink
 src/app/        composition: context and registries
 ```
 

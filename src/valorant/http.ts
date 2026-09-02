@@ -65,6 +65,16 @@ export const queryString = (query: Query | undefined): string => {
   return rendered === '' ? '' : `?${rendered}`;
 };
 
+/**
+ * The query with its unset entries removed, for logging. `queryString` drops them
+ * on the way to the wire, so a record that kept them would describe a request
+ * that was never made.
+ */
+export const definedQuery = (query: Query): Readonly<Record<string, string | number | boolean>> =>
+  Object.fromEntries(Object.entries(query).filter(([, value]) => value !== undefined)) as Readonly<
+    Record<string, string | number | boolean>
+  >;
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 

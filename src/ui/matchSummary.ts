@@ -110,7 +110,6 @@ export const renderMatchSummary = (summary: MatchSummary, strings: Strings): Emb
         value: strings.matchYouValue({
           kda: `${target.kills}/${target.deaths}/${target.assists}`,
           acs: target.acs,
-          adr: target.adr,
           headshots,
         }),
       },

@@ -26,7 +26,6 @@ const line = (
   deaths: 14,
   assists: 6,
   acs,
-  adr: 180,
   headshotPercent: 24,
   isTarget,
 });

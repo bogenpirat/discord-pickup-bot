@@ -25,7 +25,6 @@ const player = (
     headshots: 10,
     bodyshots: 30,
     legshots: 10,
-    damage: { dealt: 3300, received: 3000 },
     ...overrides,
   },
 });
@@ -178,12 +177,11 @@ describe('summariseMatch', () => {
     expect(marked.map((line) => line.puuid)).toEqual(['me']);
   });
 
-  it('averages combat score and damage over the rounds played', () => {
+  it('averages combat score over the rounds played', () => {
     const summary = summariseMatch(match(), 'me');
 
-    // 22 rounds: 4400 score and 3300 damage.
+    // 22 rounds for a score of 4400.
     expect(summary?.target.acs).toBe(200);
-    expect(summary?.target.adr).toBe(150);
   });
 
   it('averages every player over the same round count', () => {
@@ -202,7 +200,6 @@ describe('summariseMatch', () => {
     const summary = summariseMatch(unplayed, 'me');
 
     expect(summary?.target.acs).toBe(0);
-    expect(summary?.target.adr).toBe(0);
   });
 
   it('works out the headshot share of landed shots', () => {

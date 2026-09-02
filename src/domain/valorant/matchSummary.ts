@@ -19,7 +19,6 @@ export interface MatchPlayerInput {
     readonly headshots: number;
     readonly bodyshots: number;
     readonly legshots: number;
-    readonly damage: { readonly dealt: number; readonly received: number };
   };
 }
 
@@ -53,8 +52,6 @@ export interface MatchPlayerLine {
   readonly assists: number;
   /** Average combat score, the number the in-game scoreboard ranks by. */
   readonly acs: number;
-  /** Average damage per round. */
-  readonly adr: number;
   /** Whole percent, or null when the player never landed a shot. */
   readonly headshotPercent: number | null;
   readonly isTarget: boolean;
@@ -109,7 +106,6 @@ const lineFor = (
     deaths: player.stats.deaths,
     assists: player.stats.assists,
     acs: perRound(player.stats.score, rounds),
-    adr: perRound(player.stats.damage.dealt, rounds),
     headshotPercent: percent(player.stats.headshots, shots),
     isTarget: player.puuid === targetPuuid,
   };

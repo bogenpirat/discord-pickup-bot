@@ -113,7 +113,6 @@ export interface MatchHeadlineParts {
 export interface MatchStatParts {
   readonly kda: string;
   readonly acs: number;
-  readonly adr: number;
   readonly headshots: string;
 }
 
@@ -280,8 +279,7 @@ const de: Strings = {
   matchHeadline: (parts) =>
     `**${parts.score}** · ${parts.mode} · ${parts.when} · ${parts.duration}`,
   matchYouLabel: (agent) => `Deine Leistung (${agent})`,
-  matchYouValue: (parts) =>
-    `**${parts.kda}** K/D/A · ${parts.acs} ACS · ${parts.adr} ADR · ${parts.headshots} Kopftreffer`,
+  matchYouValue: (parts) => `**${parts.kda}** · ${parts.acs} ACS · ${parts.headshots} Kopftreffer`,
   matchTeamLabel: (averageTier) =>
     averageTier === null ? 'Dein Team' : `Dein Team · Ø ${averageTier}`,
   matchEnemyLabel: (averageTier) => (averageTier === null ? 'Gegner' : `Gegner · Ø ${averageTier}`),
@@ -404,8 +402,7 @@ const en: Strings = {
   matchHeadline: (parts) =>
     `**${parts.score}** · ${parts.mode} · ${parts.when} · ${parts.duration}`,
   matchYouLabel: (agent) => `Your game (${agent})`,
-  matchYouValue: (parts) =>
-    `**${parts.kda}** K/D/A · ${parts.acs} ACS · ${parts.adr} ADR · ${parts.headshots} headshots`,
+  matchYouValue: (parts) => `**${parts.kda}** · ${parts.acs} ACS · ${parts.headshots} headshots`,
   matchTeamLabel: (averageTier) =>
     averageTier === null ? 'Your team' : `Your team · avg ${averageTier}`,
   matchEnemyLabel: (averageTier) =>

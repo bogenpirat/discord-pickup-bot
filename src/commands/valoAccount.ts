@@ -10,7 +10,9 @@ import type { AppContext } from '../app/context.ts';
 import type { RiotAccount } from '../db/repositories/riotAccountRepository.ts';
 import { replyEphemeral } from '../discord/reply.ts';
 import type { SlashCommand } from '../discord/types.ts';
+import { playerCardImageUrl } from '../domain/valorant/media.ts';
 import { formatRiotId, parseRiotId } from '../domain/valorant/riotId.ts';
+import { playerCardEmbed } from '../ui/playerCard.ts';
 import { type RiotAccountParts, resolveLocale, type Strings, stringsFor } from '../ui/strings.ts';
 import { describeValorantError } from '../ui/valorantError.ts';
 import type { ValorantClient } from '../valorant/client.ts';
@@ -71,6 +73,28 @@ const definition = new SlashCommandBuilder()
       .setDescription('Delete your stored Riot ID')
       .setDescriptionLocalizations({ de: 'Deine hinterlegte Riot-ID löschen' }),
   );
+
+/**
+ * The account's player card, as the embed to hang off the reply.
+ *
+ * Empty rather than absent when there is no picture to show: the id may be one
+ * the artwork mirror does not have, and the confirmation still says everything
+ * it needs to in words.
+ */
+const cardArtwork = (context: AppContext, cardId: string | null | undefined) => {
+  const imageUrl = playerCardImageUrl(cardId);
+
+  if (imageUrl === null) {
+    return [];
+  }
+
+  return [
+    playerCardEmbed({
+      imageUrl,
+      name: context.content.findIn('playerCards', cardId)?.name ?? null,
+    }),
+  ];
+};
 
 const partsFor = (account: RiotAccount): RiotAccountParts => ({
   riotId: formatRiotId({ name: account.riotName, tag: account.riotTag }),
@@ -144,6 +168,7 @@ const handleLink = async (
       puuid: account.puuid,
       linkedAt: time(new Date(context.now().epochMilliseconds), TimestampStyles.ShortDate),
     }),
+    cardArtwork(context, account.card),
   );
 };
 
@@ -199,7 +224,13 @@ const handleRefresh = async (
     fresh.region === account.region;
 
   if (unchanged) {
-    await replyEphemeral(interaction, strings.riotAccountUnchanged(partsFor(account)));
+    await replyEphemeral(
+      interaction,
+      strings.riotAccountUnchanged(partsFor(account)),
+      // Read again just now, so the card is current even when the name is not
+      // what changed — a member who only reskinned their profile sees that.
+      cardArtwork(context, fresh.card),
+    );
     return;
   }
 
@@ -219,6 +250,7 @@ const handleRefresh = async (
       puuid: account.puuid,
       linkedAt: partsFor(account).linkedAt,
     }),
+    cardArtwork(context, fresh.card),
   );
 };
 

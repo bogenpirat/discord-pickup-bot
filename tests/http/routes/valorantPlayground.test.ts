@@ -7,7 +7,9 @@ import type {
   ValorantResult,
   ValorantStats,
 } from '../../../src/valorant/client.ts';
+import type { ContentCatalog } from '../../../src/valorant/contentCatalog.ts';
 import { silentLogger } from '../../helpers/fakes.ts';
+import { emptyContentCatalog, loadedContentCatalog } from '../../helpers/valorant.ts';
 
 const SECRET = 'abcdefghijklmnopqrstuvwxyz123456';
 const BASE = 'http://bot.example.net';
@@ -53,17 +55,22 @@ const spyClient = (result: ValorantResult<unknown> = { ok: true, value: { hello:
   return { client, calls };
 };
 
-const request = (path: string, client: ValorantClient, method = 'GET'): Promise<HttpResponse> => {
+const request = (
+  path: string,
+  client: ValorantClient,
+  method = 'GET',
+  content: ContentCatalog = emptyContentCatalog(),
+): Promise<HttpResponse> => {
   const target = new URL(path, BASE);
   return resolveRequest({ method, pathname: target.pathname, query: target.searchParams }, [
-    valorantPlaygroundRoute({ client, secret: SECRET, logger: silentLogger() }),
+    valorantPlaygroundRoute({ client, content, secret: SECRET, logger: silentLogger() }),
   ]);
 };
 
 const page = (client: ValorantClient) => request(`/pickup/${SECRET}/valorant-playground`, client);
 
-const call = (query: string, client: ValorantClient) =>
-  request(`/pickup/${SECRET}/valorant-playground/call?${query}`, client);
+const call = (query: string, client: ValorantClient, content?: ContentCatalog) =>
+  request(`/pickup/${SECRET}/valorant-playground/call?${query}`, client, 'GET', content);
 
 const bodyOf = (response: HttpResponse): Record<string, unknown> =>
   JSON.parse(response.body) as Record<string, unknown>;
@@ -186,6 +193,32 @@ describe('calling an endpoint', () => {
       value: { hello: 'world' },
       rateLimit: { used: 3, limit: 30, waiting: 1 },
     });
+  });
+
+  it('names the content ids in the payload, without touching the payload', async () => {
+    const spy = spyClient({
+      ok: true,
+      value: { metadata: { map: { id: '7eaecc1b-4337-bbf6-6ab9-04b8f06b3319' } } },
+    });
+
+    const response = await call(
+      'endpoint=getVersion&affinity=eu',
+      spy.client,
+      await loadedContentCatalog(),
+    );
+
+    expect(bodyOf(response)).toEqual({
+      ok: true,
+      value: { metadata: { map: { id: '7eaecc1b-4337-bbf6-6ab9-04b8f06b3319' } } },
+      names: { '7eaecc1b-4337-bbf6-6ab9-04b8f06b3319': 'Ascent' },
+      rateLimit: { used: 3, limit: 30, waiting: 1 },
+    });
+  });
+
+  it('leaves the names out entirely when the dump could name nothing', async () => {
+    const response = await call('endpoint=getVersion&affinity=eu', spyClient().client);
+
+    expect(bodyOf(response)).not.toHaveProperty('names');
   });
 
   it('reports a client failure as data, not as an http error', async () => {

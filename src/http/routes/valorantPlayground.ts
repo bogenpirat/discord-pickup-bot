@@ -2,12 +2,15 @@ import { timingSafeEqual } from 'node:crypto';
 import type { Logger } from '../../logger.ts';
 import { CATALOG_BY_ID, type ParamValues } from '../../valorant/catalog.ts';
 import type { ValorantClient } from '../../valorant/client.ts';
+import type { ContentCatalog } from '../../valorant/contentCatalog.ts';
 import { playgroundPage } from '../playgroundPage.ts';
 import { notFound } from '../router.ts';
 import type { HttpRequest, HttpResponse, HttpRoute } from '../types.ts';
 
 export interface ValorantPlaygroundDeps {
   readonly client: ValorantClient;
+  /** Names for the ids in an answer, which is most of what a raw payload is. */
+  readonly content: ContentCatalog;
   /** The unguessable first path segment. Everything hangs off it. */
   readonly secret: string;
   readonly logger: Logger;
@@ -148,6 +151,16 @@ export const valorantPlaygroundRoute = (deps: ValorantPlaygroundDeps): HttpRoute
       });
     }
 
-    return json(200, { ok: true, value: result.value, rateLimit });
+    // Sent beside the payload rather than folded into it: the point of the
+    // playground is to show what the API actually answered, so the names go in
+    // their own table and leave the response untouched.
+    const names = Object.fromEntries(deps.content.namesIn(result.value));
+
+    return json(200, {
+      ok: true,
+      value: result.value,
+      ...(Object.keys(names).length === 0 ? {} : { names }),
+      rateLimit,
+    });
   },
 });

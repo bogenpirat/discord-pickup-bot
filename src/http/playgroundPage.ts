@@ -48,6 +48,10 @@ pre { margin:0; padding:14px; background:var(--panel); border:1px solid var(--li
       border-radius:6px; overflow:auto; max-height:calc(100vh - 190px);
       font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px;
       white-space:pre-wrap; word-break:break-word; }
+details.names { margin-bottom:12px; background:var(--panel); border:1px solid var(--line);
+                border-radius:6px; padding:10px 14px; }
+details.names summary { cursor:pointer; color:var(--muted); font-size:12px; }
+details.names pre { border:0; padding:10px 0 0; background:none; max-height:240px; }
 img.result { max-width:100%; background:var(--panel); border:1px solid var(--line);
              border-radius:6px; padding:14px; }
 @media (max-width: 800px) { main { grid-template-columns:1fr; } }
@@ -174,6 +178,21 @@ const call = async () => {
       img.src = 'data:image/png;base64,' + payload.image;
       out.append(img);
     } else {
+      const names = Object.entries(payload.names ?? {});
+      if (names.length > 0) {
+        const details = document.createElement('details');
+        details.className = 'names';
+        const summary = document.createElement('summary');
+        summary.textContent = names.length + ' ids resolved from the content dump';
+        const list = document.createElement('pre');
+        const width = Math.max(...names.map(([id]) => id.length));
+        // Doubled, like the regex above: one backslash would be eaten by the
+        // template literal and leave a raw newline inside a string literal.
+        list.textContent = names.map(([id, name]) => id.padEnd(width) + '  ' + name).join('\\n');
+        details.append(summary, list);
+        out.append(details);
+      }
+
       const pre = document.createElement('pre');
       pre.textContent = JSON.stringify(payload.ok ? payload.value : payload.error, null, 2);
       out.append(pre);

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { eloCommand, eloPrivateCommand } from '../../src/commands/elo.ts';
-import type { Account, Mmr, MmrHistory } from '../../src/valorant/types.ts';
+import type { Account, Content, Mmr, MmrHistory } from '../../src/valorant/types.ts';
 import { createFakeCommandInteraction, createTestContext } from '../helpers/fakes.ts';
-import { fakeValorantClient } from '../helpers/valorant.ts';
+import { fakeValorantClient, SAMPLE_CONTENT } from '../helpers/valorant.ts';
 
 const ADMIN_ROLE = 'role-admin';
 
@@ -158,6 +158,33 @@ describe('/elo for yourself', () => {
     expect(files).toHaveLength(1);
     expect(files[0]?.name).toBe('elo.png');
     expect(files[0]?.attachment.subarray(1, 4).toString('ascii')).toBe('PNG');
+  });
+
+  it('names the peak act from the content dump once it has been read', async () => {
+    const client = fakeValorantClient({
+      mmr: {
+        ok: true,
+        value: {
+          ...MMR,
+          peak: {
+            ...MMR.peak,
+            season: { id: '67e373c7-48f7-b422-641b-079ace30b427', short: 'e5a1' },
+          },
+        } as typeof MMR,
+      },
+      mmrHistory: { ok: true, value: HISTORY },
+      content: { ok: true, value: SAMPLE_CONTENT as unknown as Content },
+    });
+    const context = linked(client);
+    await context.content.load();
+    const fake = eloInteraction();
+
+    await eloCommand.execute(fake.interaction, context);
+
+    const [embed] = editPayload(fake)['embeds'] as { data: Record<string, unknown> }[];
+    const fields = embed?.data['fields'] as { name: string; value: string }[];
+
+    expect(fields.map((field) => field.value)).toContain('Immortal 3 (EPISODE 5 · AKT I)');
   });
 
   it('puts the rank, the last change and the peak in the embed', async () => {

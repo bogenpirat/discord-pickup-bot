@@ -22,6 +22,7 @@ import {
 import { createKeyedMutex, type KeyedMutex } from '../lib/mutex.ts';
 import type { Logger } from '../logger.ts';
 import type { ValorantClient } from '../valorant/client.ts';
+import { type ContentCatalog, createContentCatalog } from '../valorant/contentCatalog.ts';
 
 export interface AppContext {
   readonly db: DatabaseSync;
@@ -37,6 +38,11 @@ export interface AppContext {
   readonly publicBaseUrl: string | null;
   /** The Valorant API client, or null when no API key is configured. */
   readonly valorant: ValorantClient | null;
+  /**
+   * Names for the ids the API answers with. Empty until it has been loaded, and
+   * for the whole run when there is no client to load it with.
+   */
+  readonly content: ContentCatalog;
   now(): Temporal.Instant;
 }
 
@@ -58,5 +64,8 @@ export const createAppContext = (
   powerUserIds,
   publicBaseUrl,
   valorant,
+  // Derived rather than passed in: it needs exactly the client and logger this
+  // context already has, and one catalog per context is the point of it.
+  content: createContentCatalog({ client: valorant, logger }),
   now: () => Temporal.Now.instant(),
 });

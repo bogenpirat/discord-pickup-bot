@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { valoAccountCommand } from '../../src/commands/valoAccount.ts';
-import type { Account } from '../../src/valorant/types.ts';
+import type { Account, Content } from '../../src/valorant/types.ts';
 import { createFakeCommandInteraction, createTestContext } from '../helpers/fakes.ts';
-import { fakeValorantClient } from '../helpers/valorant.ts';
+import { fakeValorantClient, SAMPLE_CONTENT } from '../helpers/valorant.ts';
 
 const ACCOUNT: Account = {
   puuid: 'puuid-1',
@@ -205,6 +205,64 @@ describe('/valo-account show', () => {
   });
 });
 
+describe('the player card that comes back with an account', () => {
+  const CARD = 'e9a3d874-4893-b17a-00ca-0b88017f7919';
+
+  const embedsOf = (fake: ReturnType<typeof createFakeCommandInteraction>) =>
+    fake.calls.flatMap((call) => {
+      const payload = call.payload as { embeds?: { data: Record<string, unknown> }[] } | null;
+      return payload?.embeds ?? [];
+    });
+
+  const linkWith = async (card: string, withContent = true) => {
+    const client = fakeValorantClient({
+      account: { ok: true, value: { ...ACCOUNT, card } },
+      ...(withContent
+        ? { content: { ok: true, value: SAMPLE_CONTENT as unknown as Content } }
+        : {}),
+    });
+    const context = createTestContext(undefined, [], client.client);
+    if (withContent) {
+      await context.content.load();
+    }
+    const fake = linkInteraction('Bogenpirat#EUW');
+
+    await valoAccountCommand.execute(fake.interaction, context);
+    return fake;
+  };
+
+  it('shows the card as a thumbnail, captioned with the name from the dump', async () => {
+    const [embed] = embedsOf(await linkWith(CARD));
+
+    expect(embed?.data['thumbnail']).toEqual({
+      url: `https://media.valorant-api.com/playercards/${CARD}/smallart.png`,
+    });
+    expect(embed?.data['footer']).toEqual({ text: 'Banner „Neo Frontier“' });
+  });
+
+  it('still shows the picture when the content dump was never read', async () => {
+    const [embed] = embedsOf(await linkWith(CARD, false));
+
+    expect(embed?.data['thumbnail']).toBeDefined();
+    // Nothing to caption it with, and a uuid would be worse than nothing.
+    expect(embed?.data['footer']).toBeUndefined();
+  });
+
+  it('keeps the confirmation itself in words, not in the embed', async () => {
+    const fake = await linkWith(CARD);
+
+    expect(fake.messages().join(' ')).toContain('Bogenpirat#EUW');
+    expect(embedsOf(fake)[0]?.data['description']).toBeUndefined();
+  });
+
+  it('says the same thing with no embed at all when there is no card to show', async () => {
+    const fake = await linkWith('not-a-uuid');
+
+    expect(embedsOf(fake)).toEqual([]);
+    expect(fake.messages().join(' ')).toContain('Bogenpirat#EUW');
+  });
+});
+
 describe('/valo-account refresh', () => {
   const refreshInteraction = () =>
     createFakeCommandInteraction({ commandName: 'valo-account', subcommand: 'refresh' });
@@ -251,6 +309,26 @@ describe('/valo-account refresh', () => {
     await valoAccountCommand.execute(fake.interaction, withLink(client));
 
     expect(fake.messages().join(' ')).toContain('Alles aktuell');
+  });
+
+  it('shows the card again on a refresh, in case that is what changed', async () => {
+    const client = fakeValorantClient({
+      accountByPuuid: {
+        ok: true,
+        value: { ...ACCOUNT, card: 'e9a3d874-4893-b17a-00ca-0b88017f7919' },
+      },
+    });
+    const fake = refreshInteraction();
+
+    await valoAccountCommand.execute(fake.interaction, withLink(client));
+
+    const embeds = fake.calls.flatMap((call) => {
+      const payload = call.payload as { embeds?: { data: Record<string, unknown> }[] } | null;
+      return payload?.embeds ?? [];
+    });
+    expect(embeds[0]?.data['thumbnail']).toEqual({
+      url: 'https://media.valorant-api.com/playercards/e9a3d874-4893-b17a-00ca-0b88017f7919/smallart.png',
+    });
   });
 
   it('writes back a renamed riot id', async () => {

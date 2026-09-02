@@ -71,6 +71,13 @@ client.once(Events.ClientReady, (ready) => {
   beat();
   void steamPoller.runNow();
 
+  // One request, once, for names the API otherwise leaves as bare uuids. The
+  // dump describes the game build, so it goes stale with a patch rather than
+  // with a match, and re-reading it per command would spend the rate limit on
+  // data that has not moved. Deliberately not awaited: nothing depends on it
+  // being there, and a slow content call should not hold up the gateway.
+  void context.content.load();
+
   // Started here rather than at boot: every value in a served calendar file comes
   // from SQLite except the guild name, which is read from a cache that stays empty
   // until the gateway handshake finishes. Binding a moment later costs a brief
@@ -85,7 +92,14 @@ client.once(Events.ClientReady, (ready) => {
     const playground =
       valorant === null || playgroundSecret === undefined
         ? []
-        : [valorantPlaygroundRoute({ client: valorant, secret: playgroundSecret, logger })];
+        : [
+            valorantPlaygroundRoute({
+              client: valorant,
+              content: context.content,
+              secret: playgroundSecret,
+              logger,
+            }),
+          ];
 
     if (playground.length > 0) {
       logger.info(

@@ -19,6 +19,7 @@ import { buildMmrSeries, type MmrSeries } from '../domain/valorant/mmrSeries.ts'
 import { renderMmrChart } from '../ui/mmrChart.ts';
 import { resolveLocale, type Strings, stringsFor } from '../ui/strings.ts';
 import { describeValorantError } from '../ui/valorantError.ts';
+import type { ContentCatalog } from '../valorant/contentCatalog.ts';
 import type { Platform, ValorantError } from '../valorant/http.ts';
 import type { Mmr } from '../valorant/types.ts';
 
@@ -77,6 +78,7 @@ const buildEmbed = (
   series: MmrSeries,
   target: ValorantTarget,
   strings: Strings,
+  content: ContentCatalog,
 ): EmbedBuilder => {
   const embed = new EmbedBuilder()
     .setColor(VALORANT_RED)
@@ -98,7 +100,13 @@ const buildEmbed = (
   if (mmr.peak != null) {
     embed.addFields({
       name: strings.eloPeakLabel,
-      value: strings.eloPeakValue(mmr.peak.tier.name, mmr.peak.season.short),
+      // `e5a1` is the only form the API sends, and it is a code rather than a
+      // name. The content dump has the act it stands for, including the episode
+      // — without which `ACT I` is one of eleven.
+      value: strings.eloPeakValue(
+        mmr.peak.tier.name,
+        content.seasonLabel(mmr.peak.season.id) ?? mmr.peak.season.short,
+      ),
       inline: true,
     });
   }
@@ -182,7 +190,7 @@ const executeFor =
     });
 
     await interaction.editReply({
-      embeds: [buildEmbed(rank.value, series, resolved, strings)],
+      embeds: [buildEmbed(rank.value, series, resolved, strings, context.content)],
       files: [new AttachmentBuilder(chart, { name: CHART_FILE })],
     });
   };

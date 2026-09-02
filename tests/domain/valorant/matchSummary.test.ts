@@ -227,7 +227,6 @@ describe('summariseMatch', () => {
     const summary = summariseMatch(match(), 'me');
 
     expect(summary?.target).toMatchObject({
-      name: 'ME',
       label: 'ME#EUW',
       agent: 'Jett',
       tier: 'Immortal 2',

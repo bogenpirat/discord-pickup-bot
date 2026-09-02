@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  averageTierName,
-  NO_TIER_SHORT,
-  tierName,
-  tierShortName,
-} from '../../../src/domain/valorant/tier.ts';
+import { averageTierName, tierName, tierShortName } from '../../../src/domain/valorant/tier.ts';
 
 describe('tierName', () => {
   it.each([
@@ -44,14 +39,15 @@ describe('tierShortName', () => {
     expect(tierShortName(tierId)).toBe(expected);
   });
 
-  it('marks a player the api gave no rank for', () => {
-    expect(tierShortName(null)).toBe(NO_TIER_SHORT);
-    expect(tierShortName(0)).toBe(NO_TIER_SHORT);
+  it('has nothing to show for a player the api gave no rank', () => {
+    expect(tierShortName(null)).toBeNull();
+    // What an unrated mode reports for everyone in the match.
+    expect(tierShortName(0)).toBeNull();
   });
 
   it('stays inside its column, whatever the rank', () => {
     for (let tierId = 3; tierId <= 27; tierId += 1) {
-      expect(tierShortName(tierId).length).toBeLessThanOrEqual(3);
+      expect(tierShortName(tierId)?.length ?? 0).toBeLessThanOrEqual(3);
     }
   });
 });

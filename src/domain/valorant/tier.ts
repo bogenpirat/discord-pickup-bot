@@ -33,9 +33,6 @@ const RADIANT = {
   short: 'Rad',
 } as const;
 
-/** The unranked placeholder, so a missing rank still occupies its column. */
-export const NO_TIER_SHORT = '—';
-
 const groupOf = (tierId: number): { group: TierGroup; division: number } | null => {
   if (tierId < FIRST_RANKED_TIER || tierId >= RADIANT.tier) {
     return null;
@@ -59,14 +56,18 @@ export const tierName = (tierId: number): string | null => {
   return found === null ? null : `${found.group.name} ${found.division}`;
 };
 
-/** The same tier in three characters or fewer, for the scoreboard column. */
-export const tierShortName = (tierId: number | null): string => {
+/**
+ * The same tier in three characters or fewer, for the scoreboard column, or
+ * null for a player with no rank — an unrated mode ranks nobody, and a column
+ * of placeholders is worse than no column.
+ */
+export const tierShortName = (tierId: number | null): string | null => {
   if (tierId === RADIANT.tier) {
     return RADIANT.short;
   }
 
   const found = tierId === null ? null : groupOf(tierId);
-  return found === null ? NO_TIER_SHORT : `${found.group.short}${found.division}`;
+  return found === null ? null : `${found.group.short}${found.division}`;
 };
 
 /**

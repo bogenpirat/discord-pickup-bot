@@ -12,24 +12,25 @@ const COLOURS: Readonly<Record<MatchSummary['outcome'], number>> = {
 const TRACKER_MATCH_URL = 'https://tracker.gg/valorant/match/';
 
 /**
- * Column widths, in monospace characters. Their sum plus the separators is the
- * width of a row, and that is the number that matters: the embed often lands in
- * the narrow chat beside a voice channel, where a row wider than roughly thirty
- * characters wraps and takes the whole scoreboard's alignment with it.
+ * Column widths, in monospace characters. What matters is the width of a whole
+ * row: the embed often lands in the narrow chat beside a voice channel, where a
+ * long row wraps and takes the scoreboard's alignment with it. The agent column
+ * is measured rather than fixed, so nine-character Brimstone never costs a row
+ * that has no Brimstone in it.
  */
-const NAME_COLUMN = 7;
-/** Agents are cut rather than elided — five characters still name every one. */
-const AGENT_COLUMN = 5;
 const TIER_COLUMN = 3;
 const KDA_COLUMN = 8;
 const SCORE_COLUMN = 3;
+/** Wide enough to read the numbers as separate columns rather than one string. */
+const GAP = '  ';
 
-const pad = (value: string, width: number): string =>
-  value.length >= width ? value.slice(0, width) : value.padEnd(width, ' ');
+interface Columns {
+  readonly agent: number;
+  /** False for the unrated modes, where a rank column would be all blanks. */
+  readonly tier: boolean;
+}
 
-/** Like `pad`, but says that it cut something — names are not guessable. */
-const padName = (value: string, width: number): string =>
-  value.length > width ? `${value.slice(0, width - 1)}…` : value.padEnd(width, ' ');
+const padEnd = (value: string, width: number): string => value.padEnd(width, ' ');
 
 const padStart = (value: string | number, width: number): string =>
   String(value).padStart(width, ' ');
@@ -44,22 +45,35 @@ export const formatDuration = (ms: number): string => {
 export const trackerMatchUrl = (matchId: string): string =>
   `${TRACKER_MATCH_URL}${encodeURIComponent(matchId)}`;
 
+// Measured across both sides at once, so the two scoreboards line up with each
+// other and not just with themselves.
+const columnsFor = (summary: MatchSummary): Columns => {
+  const players = [...summary.allies.players, ...summary.enemies.players];
+
+  return {
+    agent: Math.max(0, ...players.map((player) => player.agent.length)),
+    tier: players.some((player) => tierShortName(player.tierId) !== null),
+  };
+};
+
 /**
  * A fixed-width scoreboard, because Discord's proportional font turns a column
  * of numbers into a staircase. The target's own line is marked so it can be
  * found at a glance.
  */
-const scoreboard = (players: readonly MatchPlayerLine[]): string => {
+const scoreboard = (players: readonly MatchPlayerLine[], columns: Columns): string => {
   const rows = players.map((player) => {
     const kda = `${player.kills}/${player.deaths}/${player.assists}`;
+    const tier = columns.tier ? padEnd(tierShortName(player.tierId) ?? '', TIER_COLUMN) : '';
+
     return [
-      player.isTarget ? '>' : ' ',
-      padName(player.name, NAME_COLUMN),
-      pad(player.agent, AGENT_COLUMN),
-      padStart(tierShortName(player.tierId), TIER_COLUMN),
+      `${player.isTarget ? '>' : ' '} ${padEnd(player.agent, columns.agent)}`,
+      tier,
       padStart(kda, KDA_COLUMN),
       padStart(player.acs, SCORE_COLUMN),
-    ].join(' ');
+    ]
+      .filter((cell) => cell !== '')
+      .join(GAP);
   });
 
   return `\`\`\`\n${rows.join('\n')}\n\`\`\``;
@@ -67,15 +81,16 @@ const scoreboard = (players: readonly MatchPlayerLine[]): string => {
 
 // Full width, not two inline columns: side by side each scoreboard gets half an
 // already narrow embed, which is where the wrapping starts.
-const teamField = (label: string, team: MatchTeam) => ({
+const teamField = (label: string, team: MatchTeam, columns: Columns) => ({
   name: label,
-  value: scoreboard(team.players),
+  value: scoreboard(team.players, columns),
   inline: false,
 });
 
 export const renderMatchSummary = (summary: MatchSummary, strings: Strings): EmbedBuilder => {
   const target = summary.target;
   const headshots = target.headshotPercent === null ? strings.notSet : `${target.headshotPercent}%`;
+  const columns = columnsFor(summary);
 
   const embed = new EmbedBuilder()
     .setColor(COLOURS[summary.outcome])
@@ -99,8 +114,8 @@ export const renderMatchSummary = (summary: MatchSummary, strings: Strings): Emb
           headshots,
         }),
       },
-      teamField(strings.matchTeamLabel(summary.allies.averageTier), summary.allies),
-      teamField(strings.matchEnemyLabel(summary.enemies.averageTier), summary.enemies),
+      teamField(strings.matchTeamLabel(summary.allies.averageTier), summary.allies, columns),
+      teamField(strings.matchEnemyLabel(summary.enemies.averageTier), summary.enemies, columns),
     );
 
   // The full match, one click away, in place of a footer nobody could use the

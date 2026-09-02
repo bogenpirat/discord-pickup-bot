@@ -43,9 +43,6 @@ export interface MatchInput {
 
 export interface MatchPlayerLine {
   readonly puuid: string;
-  /** The player alone, without their tag — what the scoreboard has room for. */
-  readonly name: string;
-  /** Name and tag together, for anywhere a Riot ID has to be unambiguous. */
   readonly label: string;
   readonly agent: string;
   readonly tier: string | null;
@@ -104,7 +101,6 @@ const lineFor = (
 
   return {
     puuid: player.puuid,
-    name: player.name,
     label: `${player.name}#${player.tag}`,
     agent: player.agent.name,
     tier: player.tier?.name ?? null,

@@ -9,16 +9,16 @@ import { stringsFor } from '../../src/ui/strings.ts';
 
 const de = stringsFor('de');
 
+/** Tier 25 is Immortal 2; tier 0 is what an unrated mode reports. */
 const line = (
-  name: string,
+  puuid: string,
   agent: string,
   acs: number,
   isTarget = false,
   tierId: number | null = 25,
 ): MatchPlayerLine => ({
-  puuid: name,
-  name,
-  label: `${name}#EUW`,
+  puuid,
+  label: `${puuid}#EUW`,
   agent,
   tier: 'Immortal 2',
   tierId,
@@ -50,6 +50,15 @@ const summary = (overrides: Partial<MatchSummary> = {}): MatchSummary => ({
   enemies: team([line('foe', 'Sova', 220)]),
   ...overrides,
 });
+
+/** A match of the same shape that nobody in it holds a rank in. */
+const unrated = (overrides: Partial<MatchSummary> = {}): MatchSummary =>
+  summary({
+    mode: 'Swiftplay',
+    allies: team([line('ally', 'Omen', 300, false, 0), line('me', 'Jett', 260, true, 0)], null),
+    enemies: team([line('foe', 'Sova', 220, false, 0)], null),
+    ...overrides,
+  });
 
 const dataOf = (value: MatchSummary) => renderMatchSummary(value, de).data;
 
@@ -144,19 +153,51 @@ describe('renderMatchSummary', () => {
     expect(rows[0]).toContain('Jett');
   });
 
-  it('names each player and their rank on their row', () => {
-    const rows = rowsOf(fieldsOf(summary())[1]);
-
-    expect(rows[0]).toContain('ally');
-    // Immortal 2, in the three characters the column allows.
-    expect(rows[0]).toContain('Im2');
+  it('shows each rank in the three characters the column allows', () => {
+    expect(rowsOf(fieldsOf(summary())[1])[0]).toContain('Im2');
   });
 
-  it('holds a place in the rank column for an unranked player', () => {
-    const unranked = summary({ allies: team([line('ally', 'Omen', 300, false, null)], null) });
-    const rows = rowsOf(fieldsOf(unranked)[1]);
+  it('drops the rank column in a mode that ranks nobody', () => {
+    const rows = rowsOf(fieldsOf(unrated())[1]);
 
-    expect(rows[0]).toContain('—');
+    expect(rows[0]).toBe('  Omen   21/14/6  300');
+  });
+
+  it('leaves a gap rather than a placeholder for one unranked player', () => {
+    const mixed = summary({
+      allies: team([line('ally', 'Omen', 300), line('me', 'Jett', 260, true, 0)]),
+    });
+    const rows = rowsOf(fieldsOf(mixed)[1]);
+
+    expect(rows[0]).toContain('Im2');
+    expect(rows[1]).toBe('> Jett        21/14/6  260');
+  });
+
+  it('spells agent names out in full, however long they are', () => {
+    const wide = summary({ enemies: team([line('foe', 'Brimstone', 220)]) });
+
+    expect(rowsOf(fieldsOf(wide)[2])[0]).toContain('Brimstone');
+  });
+
+  it('measures the agent column across both sides, so the two line up', () => {
+    const wide = summary({ enemies: team([line('foe', 'Brimstone', 220)]) });
+    const fields = fieldsOf(wide);
+    const rows = [...rowsOf(fields[1]), ...rowsOf(fields[2])];
+
+    const kdaColumns = rows.map((row) => row.indexOf('21/14/6'));
+    expect(new Set(kdaColumns).size).toBe(1);
+  });
+
+  // The embed is often read in the narrow chat beside a voice channel, where a
+  // longer row wraps and the columns stop being columns.
+  it('keeps every row within the width a narrow channel can show', () => {
+    const wide = summary({
+      allies: team([line('ally', 'Brimstone', 300), line('me', 'Deadlock', 260, true)]),
+    });
+
+    for (const row of rowsOf(fieldsOf(wide)[1])) {
+      expect(row.length).toBeLessThanOrEqual(32);
+    }
   });
 
   it('puts each side average rank in its heading', () => {
@@ -167,37 +208,7 @@ describe('renderMatchSummary', () => {
   });
 
   it('leaves the heading bare when the side has no average rank', () => {
-    const unranked = summary({ allies: team([line('ally', 'Omen', 300, false, null)], null) });
-
-    expect(fieldsOf(unranked)[1]?.name).toBe('Dein Team');
-  });
-
-  it('keeps the scoreboard columns aligned whatever the agent name', () => {
-    const wide = summary({
-      allies: team([line('a', 'Killjoy', 300), line('me', 'Iso', 260, true)]),
-    });
-    const rows = rowsOf(fieldsOf(wide)[1]);
-
-    const kdaColumns = rows.map((row) => row.indexOf('21/14/6'));
-    expect(new Set(kdaColumns).size).toBe(1);
-  });
-
-  // The embed is often read in the narrow chat beside a voice channel, where a
-  // longer row wraps and the columns stop being columns.
-  it('keeps every row within the width a narrow channel can show', () => {
-    const wide = summary({
-      allies: team([line('bogenpirat', 'Deadlock', 300), line('me', 'Jett', 260, true)]),
-    });
-
-    for (const row of rowsOf(fieldsOf(wide)[1])) {
-      expect(row.length).toBeLessThanOrEqual(32);
-    }
-  });
-
-  it('says that it cut a name it had no room for', () => {
-    const wide = summary({ allies: team([line('bogenpirat', 'Omen', 300)]) });
-
-    expect(rowsOf(fieldsOf(wide)[1])[0]).toContain('bogenp…');
+    expect(fieldsOf(unrated())[1]?.name).toBe('Dein Team');
   });
 
   it('links the title at the match on tracker.gg, in place of a bare id', () => {

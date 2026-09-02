@@ -1,3 +1,5 @@
+import { averageTierName } from './tier.ts';
+
 /**
  * The shape this module needs out of a v4 match, named structurally so the
  * domain does not depend on the generated API types.
@@ -8,7 +10,7 @@ export interface MatchPlayerInput {
   readonly tag: string;
   readonly team_id: string;
   readonly agent: { readonly name: string };
-  readonly tier?: { readonly name?: string } | undefined;
+  readonly tier?: { readonly id?: number; readonly name?: string } | undefined;
   readonly stats: {
     readonly kills: number;
     readonly deaths: number;
@@ -41,9 +43,14 @@ export interface MatchInput {
 
 export interface MatchPlayerLine {
   readonly puuid: string;
+  /** The player alone, without their tag — what the scoreboard has room for. */
+  readonly name: string;
+  /** Name and tag together, for anywhere a Riot ID has to be unambiguous. */
   readonly label: string;
   readonly agent: string;
   readonly tier: string | null;
+  /** The rank as a ladder position, which is what an average can be taken of. */
+  readonly tierId: number | null;
   readonly kills: number;
   readonly deaths: number;
   readonly assists: number;
@@ -54,6 +61,13 @@ export interface MatchPlayerLine {
   /** Whole percent, or null when the player never landed a shot. */
   readonly headshotPercent: number | null;
   readonly isTarget: boolean;
+}
+
+/** One side of the match, best combat score first. */
+export interface MatchTeam {
+  readonly players: readonly MatchPlayerLine[];
+  /** The side's mean rank, or null when the API ranked nobody on it. */
+  readonly averageTier: string | null;
 }
 
 export type MatchOutcome = 'win' | 'loss' | 'draw';
@@ -68,9 +82,9 @@ export interface MatchSummary {
   readonly roundsWon: number;
   readonly roundsLost: number;
   readonly target: MatchPlayerLine;
-  /** The target's side, best combat score first, including the target. */
-  readonly allies: readonly MatchPlayerLine[];
-  readonly enemies: readonly MatchPlayerLine[];
+  /** The target's side, including the target. */
+  readonly allies: MatchTeam;
+  readonly enemies: MatchTeam;
 }
 
 const UNKNOWN_MODE = 'Unknown';
@@ -90,9 +104,11 @@ const lineFor = (
 
   return {
     puuid: player.puuid,
+    name: player.name,
     label: `${player.name}#${player.tag}`,
     agent: player.agent.name,
     tier: player.tier?.name ?? null,
+    tierId: player.tier?.id ?? null,
     kills: player.stats.kills,
     deaths: player.stats.deaths,
     assists: player.stats.assists,
@@ -104,6 +120,11 @@ const lineFor = (
 };
 
 const byCombatScore = (a: MatchPlayerLine, b: MatchPlayerLine): number => b.acs - a.acs;
+
+const teamOf = (players: readonly MatchPlayerLine[]): MatchTeam => ({
+  players: [...players].sort(byCombatScore),
+  averageTier: averageTierName(players.map((player) => player.tierId)),
+});
 
 const timeOf = (date: string): number => {
   const parsed = Date.parse(date);
@@ -137,11 +158,8 @@ export const summariseMatch = (match: MatchInput, puuid: string): MatchSummary |
     ally: entry.team_id === player.team_id,
   }));
 
-  const sideOf = (ally: boolean): readonly MatchPlayerLine[] =>
-    lines
-      .filter((entry) => entry.ally === ally)
-      .map((entry) => entry.line)
-      .sort(byCombatScore);
+  const sideOf = (ally: boolean): MatchTeam =>
+    teamOf(lines.filter((entry) => entry.ally === ally).map((entry) => entry.line));
 
   // A team the match does not describe leaves the score at 0-0, so it is already
   // a draw by the round count; naming it here keeps `won` off an optional read.

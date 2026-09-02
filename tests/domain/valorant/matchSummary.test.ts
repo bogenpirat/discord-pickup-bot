@@ -16,7 +16,7 @@ const player = (
   tag: 'EUW',
   team_id: team,
   agent: { name: agent },
-  tier: { name: 'Immortal 2' },
+  tier: { id: 25, name: 'Immortal 2' },
   stats: {
     kills: 10,
     deaths: 10,
@@ -51,6 +51,24 @@ const match = (overrides: Partial<MatchInput> = {}): MatchInput => ({
   ],
   ...overrides,
 });
+
+/** A match whose ally and enemy tier ids can be set, to check the averages. */
+const ranked = (
+  allies: readonly (number | undefined)[] = [12, 14],
+  enemies: readonly (number | undefined)[] = [21, 22],
+): MatchInput => {
+  const at = (entry: MatchPlayerInput, id: number | undefined): MatchPlayerInput => ({
+    ...entry,
+    tier: id === undefined ? undefined : { id, name: `tier ${id}` },
+  });
+
+  return match({
+    players: [
+      ...allies.map((id, index) => at(player(index === 0 ? 'me' : `ally-${index}`, 'Red'), id)),
+      ...enemies.map((id, index) => at(player(`enemy-${index}`, 'Blue'), id)),
+    ],
+  });
+};
 
 describe('summariseMatch', () => {
   it('returns null when the player is not in the match', () => {
@@ -133,20 +151,27 @@ describe('summariseMatch', () => {
   it('splits the sides around the target', () => {
     const summary = summariseMatch(match(), 'me');
 
-    expect(summary?.allies.map((line) => line.puuid).sort()).toEqual(['ally-1', 'ally-2', 'me']);
-    expect(summary?.enemies.map((line) => line.puuid).sort()).toEqual(['enemy-1', 'enemy-2']);
+    expect(summary?.allies.players.map((line) => line.puuid).sort()).toEqual([
+      'ally-1',
+      'ally-2',
+      'me',
+    ]);
+    expect(summary?.enemies.players.map((line) => line.puuid).sort()).toEqual([
+      'enemy-1',
+      'enemy-2',
+    ]);
   });
 
   it('sorts each side by combat score, best first', () => {
     const summary = summariseMatch(match(), 'me');
 
-    expect(summary?.allies.map((line) => line.puuid)).toEqual(['ally-1', 'me', 'ally-2']);
-    expect(summary?.enemies.map((line) => line.puuid)).toEqual(['enemy-1', 'enemy-2']);
+    expect(summary?.allies.players.map((line) => line.puuid)).toEqual(['ally-1', 'me', 'ally-2']);
+    expect(summary?.enemies.players.map((line) => line.puuid)).toEqual(['enemy-1', 'enemy-2']);
   });
 
   it('marks exactly one line as the target, on both sides taken together', () => {
     const summary = summariseMatch(match(), 'me');
-    const marked = [...(summary?.allies ?? []), ...(summary?.enemies ?? [])].filter(
+    const marked = [...(summary?.allies.players ?? []), ...(summary?.enemies.players ?? [])].filter(
       (line) => line.isTarget,
     );
 
@@ -164,7 +189,7 @@ describe('summariseMatch', () => {
   it('averages every player over the same round count', () => {
     const summary = summariseMatch(match(), 'me');
 
-    expect(summary?.enemies.find((line) => line.puuid === 'enemy-1')?.acs).toBe(250);
+    expect(summary?.enemies.players.find((line) => line.puuid === 'enemy-1')?.acs).toBe(250);
   });
 
   it('does not divide by zero when no round was played', () => {
@@ -202,9 +227,11 @@ describe('summariseMatch', () => {
     const summary = summariseMatch(match(), 'me');
 
     expect(summary?.target).toMatchObject({
+      name: 'ME',
       label: 'ME#EUW',
       agent: 'Jett',
       tier: 'Immortal 2',
+      tierId: 25,
       kills: 10,
       deaths: 10,
       assists: 5,
@@ -219,6 +246,26 @@ describe('summariseMatch', () => {
       })),
     });
 
-    expect(summariseMatch(unranked, 'me')?.target.tier).toBeNull();
+    expect(summariseMatch(unranked, 'me')?.target).toMatchObject({ tier: null, tierId: null });
+  });
+
+  it('names each side by its mean rank', () => {
+    const summary = summariseMatch(ranked(), 'me');
+
+    // Gold 1 and Gold 3 average to Gold 2; Ascendant 1 and 2 to Ascendant 2.
+    expect(summary?.allies.averageTier).toBe('Gold 2');
+    expect(summary?.enemies.averageTier).toBe('Ascendant 2');
+  });
+
+  it('leaves an unranked player out of the average rather than counting them low', () => {
+    const summary = summariseMatch(ranked([12, undefined]), 'me');
+
+    expect(summary?.allies.averageTier).toBe('Gold 1');
+  });
+
+  it('has no average for a side the api ranked nobody on', () => {
+    const summary = summariseMatch(ranked([undefined, undefined]), 'me');
+
+    expect(summary?.allies.averageTier).toBeNull();
   });
 });

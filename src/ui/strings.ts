@@ -97,8 +97,8 @@ export interface Strings {
   readonly matchHeadline: (parts: MatchHeadlineParts) => string;
   readonly matchYouLabel: (agent: string) => string;
   readonly matchYouValue: (parts: MatchStatParts) => string;
-  readonly matchTeamLabel: string;
-  readonly matchEnemyLabel: string;
+  readonly matchTeamLabel: (averageTier: string | null) => string;
+  readonly matchEnemyLabel: (averageTier: string | null) => string;
   readonly matchNone: (riotId: string) => string;
 }
 
@@ -282,8 +282,9 @@ const de: Strings = {
   matchYouLabel: (agent) => `Deine Leistung (${agent})`,
   matchYouValue: (parts) =>
     `**${parts.kda}** K/D/A · ${parts.acs} ACS · ${parts.adr} ADR · ${parts.headshots} Kopftreffer`,
-  matchTeamLabel: 'Dein Team',
-  matchEnemyLabel: 'Gegner',
+  matchTeamLabel: (averageTier) =>
+    averageTier === null ? 'Dein Team' : `Dein Team · Ø ${averageTier}`,
+  matchEnemyLabel: (averageTier) => (averageTier === null ? 'Gegner' : `Gegner · Ø ${averageTier}`),
   matchNone: (riotId) => `Für **${riotId}** habe ich kein letztes Match gefunden.`,
 };
 
@@ -405,8 +406,10 @@ const en: Strings = {
   matchYouLabel: (agent) => `Your game (${agent})`,
   matchYouValue: (parts) =>
     `**${parts.kda}** K/D/A · ${parts.acs} ACS · ${parts.adr} ADR · ${parts.headshots} headshots`,
-  matchTeamLabel: 'Your team',
-  matchEnemyLabel: 'Enemy team',
+  matchTeamLabel: (averageTier) =>
+    averageTier === null ? 'Your team' : `Your team · avg ${averageTier}`,
+  matchEnemyLabel: (averageTier) =>
+    averageTier === null ? 'Enemy team' : `Enemy team · avg ${averageTier}`,
   matchNone: (riotId) => `I could not find a recent match for **${riotId}**.`,
 };
 

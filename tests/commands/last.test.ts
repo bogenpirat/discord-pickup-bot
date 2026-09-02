@@ -130,7 +130,7 @@ describe('/last', () => {
     expect(embed['title']).toBe('Ascent · Sieg');
     expect(String(embed['description'])).toContain('13–9');
     expect(String(embed['description'])).toContain('Competitive');
-    expect(embed['footer']).toEqual({ text: 'match-abc' });
+    expect(embed['url']).toBe('https://tracker.gg/valorant/match/match-abc');
   });
 
   it('names the account it is about', async () => {

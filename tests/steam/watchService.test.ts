@@ -41,6 +41,16 @@ const fakeDiscordClient = (channel: FakeChannel | null): Client =>
     channels: { fetch: async () => channel },
   }) as unknown as Client;
 
+/** discord.js rejects rather than returning null for a channel the bot cannot see. */
+const unreachableDiscordClient = (): Client =>
+  ({
+    channels: {
+      fetch: async () => {
+        throw new Error('Missing Access');
+      },
+    },
+  }) as unknown as Client;
+
 const sendableChannel = (sent: unknown[], fails = false): FakeChannel => ({
   isTextBased: () => true,
   isSendable: () => true,
@@ -522,6 +532,25 @@ describe('steam watch logging', () => {
     expect(outcome).toBe('announce-failed');
     expect(log.find('steam watch channel unavailable, retrying later')?.level).toBe('warn');
     expect(context.steamWatches.findById(row.id)).toBeDefined();
+  });
+
+  it('does not count a release as announced when the channel fetch rejects', async () => {
+    const log = recordingLogger();
+    const context = { ...createTestContext(NOW), logger: log.logger };
+    const row = seedRow(context);
+
+    const outcome = await processDueWatch(
+      context,
+      fakeSteamClient({ kind: 'found', details: details({ comingSoon: false }) }),
+      unreachableDiscordClient(),
+      row,
+    );
+
+    expect(outcome).toBe('announce-failed');
+    expect(log.find('steam watch channel unavailable, retrying later')?.level).toBe('warn');
+    expect(context.steamWatches.findById(row.id)?.nextCheckAt).toBe(
+      NOW.add({ hours: 1 }).epochMilliseconds,
+    );
   });
 
   it('does not count a release as announced when sending throws', async () => {

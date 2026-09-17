@@ -22,7 +22,11 @@ const details = (overrides: Partial<SteamAppDetails> = {}): SteamAppDetails => (
   ...overrides,
 });
 
-const fakeSteamClient = (result: SteamLookupResult): SteamClient => ({
+const fakeSteamClient = (
+  result: SteamLookupResult,
+  releaseAt: Temporal.Instant | null = null,
+): SteamClient => ({
+  getReleaseTimestamp: async () => releaseAt,
   getAppDetails: async () => result,
 });
 
@@ -567,5 +571,83 @@ describe('steam watch logging', () => {
 
     expect(outcome).toBe('unavailable');
     expect(log.find('steam app no longer available, stopped watching')?.level).toBe('warn');
+  });
+});
+
+// Regression: The Door Factory (app 4815930) was announced at 00:05 Berlin on its
+// release day while Steam still reported coming_soon, ~22h before it actually shipped.
+describe('release-day timing', () => {
+  const RELEASE_AT = Temporal.Instant.from('2026-09-18T19:43:00Z');
+  const JUST_AFTER_MIDNIGHT = Temporal.Instant.from('2026-09-17T22:05:00Z');
+  const doorFactory = details({ comingSoon: true, releaseDateText: '18 Sep, 2026' });
+
+  it('does not announce at local midnight while steam still says coming soon', async () => {
+    const context = createTestContext(JUST_AFTER_MIDNIGHT);
+    const sent: unknown[] = [];
+    await recordDetectedGame(
+      context,
+      fakeSteamClient({ kind: 'found', details: doorFactory }, RELEASE_AT),
+      detectInput,
+    );
+    const row = context.steamWatches.findByGuildAndApp(GUILD, APP_ID);
+
+    const outcome = await processDueWatch(
+      context,
+      fakeSteamClient({ kind: 'found', details: doorFactory }, RELEASE_AT),
+      fakeDiscordClient(sendableChannel(sent)),
+      row as NonNullable<typeof row>,
+    );
+
+    expect(outcome).toBe('scheduled');
+    expect(sent).toEqual([]);
+  });
+
+  it('waits for the exact release instant rather than the start of the day', async () => {
+    const context = createTestContext(JUST_AFTER_MIDNIGHT);
+    await recordDetectedGame(
+      context,
+      fakeSteamClient({ kind: 'found', details: doorFactory }, RELEASE_AT),
+      detectInput,
+    );
+
+    const row = context.steamWatches.findByGuildAndApp(GUILD, APP_ID);
+    expect(row?.status).toBe('scheduled');
+    expect(row?.nextCheckAt).toBe(RELEASE_AT.epochMilliseconds);
+    expect(row?.releaseDate).toBe(RELEASE_AT.epochMilliseconds);
+  });
+
+  it('announces once steam clears coming_soon', async () => {
+    const context = createTestContext(RELEASE_AT);
+    const sent: unknown[] = [];
+    await recordDetectedGame(
+      context,
+      fakeSteamClient({ kind: 'found', details: doorFactory }, RELEASE_AT),
+      detectInput,
+    );
+    const row = context.steamWatches.findByGuildAndApp(GUILD, APP_ID);
+
+    const outcome = await processDueWatch(
+      context,
+      fakeSteamClient({ kind: 'found', details: details({ comingSoon: false }) }),
+      fakeDiscordClient(sendableChannel(sent)),
+      row as NonNullable<typeof row>,
+    );
+
+    expect(outcome).toBe('released');
+    expect(sent).toHaveLength(1);
+    expect(context.steamWatches.findById((row as NonNullable<typeof row>).id)).toBeUndefined();
+  });
+
+  it('falls back to the steam-time day start when the store page has no timestamp', async () => {
+    const context = createTestContext(JUST_AFTER_MIDNIGHT);
+    await recordDetectedGame(
+      context,
+      fakeSteamClient({ kind: 'found', details: doorFactory }, null),
+      detectInput,
+    );
+
+    const row = context.steamWatches.findByGuildAndApp(GUILD, APP_ID);
+    // Midnight Pacific on 2026-09-18, not midnight Berlin.
+    expect(row?.nextCheckAt).toBe(Temporal.Instant.from('2026-09-18T07:00:00Z').epochMilliseconds);
   });
 });

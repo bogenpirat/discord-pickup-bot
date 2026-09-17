@@ -33,6 +33,7 @@ const countingSteamClient = (): { client: SteamClient; calls: number[] } => {
   return {
     calls,
     client: {
+      getReleaseTimestamp: async () => null,
       getAppDetails: async (appId) => {
         calls.push(appId);
         return { kind: 'invalid' };
@@ -42,6 +43,7 @@ const countingSteamClient = (): { client: SteamClient; calls: number[] } => {
 };
 
 const pendingSteamClient = (): SteamClient => ({
+  getReleaseTimestamp: async () => null,
   getAppDetails: async (appId) => ({
     kind: 'found',
     details: {

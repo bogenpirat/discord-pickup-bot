@@ -1,4 +1,6 @@
 import type { PickupChoice } from '../domain/pickupChoice.ts';
+import type { MatchOutcome } from '../domain/valorant/matchSummary.ts';
+import type { RiotIdProblem } from '../domain/valorant/riotId.ts';
 
 export const APP_LOCALES = ['de', 'en'] as const;
 
@@ -59,6 +61,94 @@ export interface Strings {
   readonly steamWatchNotFound: string;
   readonly steamReleasedContent: (name: string) => string;
   readonly steamPriceLabel: string;
+  readonly valorantNotConfigured: string;
+  readonly valorantUnauthorized: string;
+  readonly valorantRateLimited: string;
+  readonly valorantApiUnavailable: string;
+  readonly riotIdProblem: Readonly<Record<RiotIdProblem, string>>;
+  readonly invalidRiotId: (value: string, reason: string) => string;
+  readonly riotAccountNotFound: (riotId: string) => string;
+  readonly riotAccountLinked: (parts: RiotAccountParts) => string;
+  readonly riotAccountTaken: (riotId: string, userId: string) => string;
+  readonly riotAccountShown: (userId: string, parts: RiotAccountParts) => string;
+  readonly riotAccountNotLinked: string;
+  readonly riotAccountNotLinkedOther: (userId: string) => string;
+  readonly riotAccountRefreshed: (parts: RiotAccountParts) => string;
+  readonly riotAccountUnchanged: (parts: RiotAccountParts) => string;
+  readonly riotAccountUnlinked: string;
+  readonly valorantApiStatus: (parts: ValorantApiStatusParts) => string;
+  readonly valorantProbeOk: (version: string) => string;
+  readonly valorantProbeFailed: (reason: string) => string;
+  readonly valorantNotBlocked: string;
+  readonly valorantBlockedUntil: (timestamp: string) => string;
+  readonly never: string;
+  readonly eloRankLabel: string;
+  readonly eloRankValue: (tier: string, rr: number) => string;
+  readonly eloLastChangeLabel: string;
+  readonly eloPeakLabel: string;
+  readonly eloPeakValue: (tier: string, season: string) => string;
+  readonly eloLeaderboardLabel: string;
+  readonly eloRecord: (parts: EloRecordParts) => string;
+  readonly eloNoHistory: string;
+  /** Caption drawn over an unrated stretch of the chart. Kept to one short word. */
+  readonly eloUnrated: string;
+  /** Drawn across the chart when no match in the window carried a rank. */
+  readonly eloUnratedOnly: string;
+  readonly eloNoRankedData: (riotId: string) => string;
+  readonly valorantRiotIdAdminOnly: string;
+  readonly matchTitle: (map: string, outcome: string) => string;
+  readonly matchOutcome: Readonly<Record<MatchOutcome, string>>;
+  readonly matchHeadline: (parts: MatchHeadlineParts) => string;
+  readonly matchYouLabel: (agent: string) => string;
+  readonly matchYouValue: (parts: MatchStatParts) => string;
+  readonly matchTeamLabel: (averageTier: string | null) => string;
+  readonly matchEnemyLabel: (averageTier: string | null) => string;
+  readonly matchNone: (riotId: string) => string;
+}
+
+export interface MatchHeadlineParts {
+  readonly score: string;
+  readonly mode: string;
+  /** A rendered Discord timestamp, so this layer stays free of time logic. */
+  readonly when: string;
+  readonly duration: string;
+}
+
+export interface MatchStatParts {
+  readonly kda: string;
+  readonly acs: number;
+  readonly headshots: string;
+}
+
+export interface EloRecordParts {
+  /** Ranked matches only — the ones the record and the net are measured over. */
+  readonly matches: number;
+  readonly wins: number;
+  readonly losses: number;
+  /** Already signed, e.g. `+164`. */
+  readonly net: string;
+  /** Matches in the same window that the account played with no rank. */
+  readonly unrated: number;
+}
+
+export interface RiotAccountParts {
+  readonly riotId: string;
+  readonly region: string;
+  readonly puuid: string;
+  /** Preformatted Discord timestamp, so this layer stays free of time logic. */
+  readonly linkedAt: string;
+}
+
+export interface ValorantApiStatusParts {
+  readonly probe: string;
+  readonly used: number;
+  readonly limit: number;
+  readonly waiting: number;
+  readonly requests: number;
+  readonly failures: number;
+  readonly rateLimitHits: number;
+  readonly lastRateLimited: string;
+  readonly blocked: string;
 }
 
 export interface SteamWatchListEntryParts {
@@ -135,6 +225,76 @@ const de: Strings = {
   steamWatchNotFound: 'Dazu habe ich keinen beobachteten Eintrag gefunden.',
   steamReleasedContent: (name) => `🎮 **${name}** ist jetzt verfügbar!`,
   steamPriceLabel: 'Preis',
+  valorantNotConfigured:
+    'Für diesen Bot ist kein Valorant-API-Schlüssel hinterlegt. Ein Admin muss `VALORANT_API_KEY` setzen.',
+  valorantUnauthorized:
+    'Die Valorant-API hat den Schlüssel abgelehnt. Ein Admin sollte `VALORANT_API_KEY` prüfen.',
+  valorantRateLimited:
+    'Das Limit der Valorant-API ist gerade erschöpft. Bitte versuch es in einer Minute noch einmal.',
+  valorantApiUnavailable:
+    'Die Valorant-API antwortet gerade nicht. Bitte versuch es später noch einmal.',
+  riotIdProblem: {
+    'missing-tag': 'es fehlt das `#` mit dem Tag',
+    'empty-name': 'vor dem `#` steht kein Name',
+    'name-too-long': 'der Name ist länger als 16 Zeichen',
+    'invalid-tag': 'der Tag muss aus 3 bis 5 Buchstaben oder Ziffern bestehen',
+  },
+  invalidRiotId: (value, reason) =>
+    `„${value}“ ist keine gültige Riot-ID: ${reason}. Beispiel: \`Name#EUW\`.`,
+  riotAccountNotFound: (riotId) =>
+    `Riot kennt **${riotId}** nicht. Achte auf Groß-/Kleinschreibung und den richtigen Tag.`,
+  riotAccountLinked: (parts) =>
+    `Verknüpft mit **${parts.riotId}** (Region \`${parts.region}\`).\nPUUID: \`${parts.puuid}\``,
+  riotAccountTaken: (riotId, userId) => `**${riotId}** ist bereits mit <@${userId}> verknüpft.`,
+  riotAccountShown: (userId, parts) =>
+    `<@${userId}> → **${parts.riotId}** (Region \`${parts.region}\`)\nVerknüpft seit ${parts.linkedAt}\nPUUID: \`${parts.puuid}\``,
+  riotAccountNotLinked: 'Du hast noch keine Riot-ID hinterlegt. Nutze `/valo-account verknüpfen`.',
+  riotAccountNotLinkedOther: (userId) => `<@${userId}> hat noch keine Riot-ID hinterlegt.`,
+  riotAccountRefreshed: (parts) =>
+    `Aktualisiert: du heißt jetzt **${parts.riotId}** (Region \`${parts.region}\`).`,
+  riotAccountUnchanged: (parts) =>
+    `Alles aktuell: **${parts.riotId}** (Region \`${parts.region}\`).`,
+  riotAccountUnlinked: 'Deine Riot-ID ist nicht mehr hinterlegt.',
+  valorantApiStatus: (parts) =>
+    [
+      `**Valorant-API:** ${parts.probe}`,
+      `**Limit:** ${parts.used}/${parts.limit} in der letzten Minute, ${parts.waiting} wartend`,
+      `**Gesperrt:** ${parts.blocked}`,
+      `**Gesamt:** ${parts.requests} Anfragen, ${parts.failures} Fehler, ${parts.rateLimitHits}× 429`,
+      `**Letztes 429:** ${parts.lastRateLimited}`,
+    ].join('\n'),
+  valorantProbeOk: (version) => `✅ erreichbar (Spielversion \`${version}\`)`,
+  valorantProbeFailed: (reason) => `⚠️ ${reason}`,
+  valorantNotBlocked: 'nein',
+  valorantBlockedUntil: (timestamp) => `ja, bis ${timestamp}`,
+  never: 'nie',
+  eloRankLabel: 'Rang',
+  eloRankValue: (tier, rr) => `${tier} · ${rr} RR`,
+  eloLastChangeLabel: 'Letztes Match',
+  eloPeakLabel: 'Bestwert',
+  eloPeakValue: (tier, season) => `${tier} (${season})`,
+  eloLeaderboardLabel: 'Leaderboard',
+  eloRecord: (parts) =>
+    `${parts.matches} Matches · ${parts.wins}S ${parts.losses}N · ${parts.net} Elo${
+      parts.unrated === 0 ? '' : ` · ${parts.unrated} ohne Wertung`
+    }`,
+  eloNoHistory: 'keine gewerteten Matches gefunden',
+  eloUnrated: 'ohne Wertung',
+  eloUnratedOnly: 'in diesem Zeitraum ohne Wertung',
+  eloNoRankedData: (riotId) =>
+    `Für **${riotId}** liegen keine Ranglisten-Daten vor. Vielleicht wurde die Platzierung noch nicht gespielt.`,
+  valorantRiotIdAdminOnly:
+    'Eine fremde Riot-ID darf nur abfragen, wer die Config-Befehle nutzen darf. Ohne Angabe nutzt der Befehl deine eigene verknüpfte Riot-ID.',
+  matchTitle: (map, outcome) => `${map} · ${outcome}`,
+  matchOutcome: { win: 'Sieg', loss: 'Niederlage', draw: 'Unentschieden' },
+  matchHeadline: (parts) =>
+    `**${parts.score}** · ${parts.mode} · ${parts.when} · ${parts.duration}`,
+  matchYouLabel: (agent) => `Deine Leistung (${agent})`,
+  matchYouValue: (parts) => `**${parts.kda}** · ${parts.acs} ACS · ${parts.headshots} Kopftreffer`,
+  matchTeamLabel: (averageTier) =>
+    averageTier === null ? 'Dein Team' : `Dein Team · Ø ${averageTier}`,
+  matchEnemyLabel: (averageTier) => (averageTier === null ? 'Gegner' : `Gegner · Ø ${averageTier}`),
+  matchNone: (riotId) => `Für **${riotId}** habe ich kein letztes Match gefunden.`,
 };
 
 const en: Strings = {
@@ -195,6 +355,74 @@ const en: Strings = {
   steamWatchNotFound: 'Could not find a watched entry for that.',
   steamReleasedContent: (name) => `🎮 **${name}** is now available!`,
   steamPriceLabel: 'Price',
+  valorantNotConfigured:
+    'No Valorant API key is configured for this bot. An admin needs to set `VALORANT_API_KEY`.',
+  valorantUnauthorized:
+    'The Valorant API rejected the key. An admin should check `VALORANT_API_KEY`.',
+  valorantRateLimited: 'The Valorant API rate limit is exhausted. Please try again in a minute.',
+  valorantApiUnavailable: 'The Valorant API is not responding right now. Please try again later.',
+  riotIdProblem: {
+    'missing-tag': 'the `#` and tag are missing',
+    'empty-name': 'there is no name before the `#`',
+    'name-too-long': 'the name is longer than 16 characters',
+    'invalid-tag': 'the tag must be 3 to 5 letters or digits',
+  },
+  invalidRiotId: (value, reason) =>
+    `"${value}" is not a valid Riot ID: ${reason}. Example: \`Name#EUW\`.`,
+  riotAccountNotFound: (riotId) => `Riot does not know **${riotId}**. Check the spelling and tag.`,
+  riotAccountLinked: (parts) =>
+    `Linked to **${parts.riotId}** (region \`${parts.region}\`).\nPUUID: \`${parts.puuid}\``,
+  riotAccountTaken: (riotId, userId) => `**${riotId}** is already linked by <@${userId}>.`,
+  riotAccountShown: (userId, parts) =>
+    `<@${userId}> → **${parts.riotId}** (region \`${parts.region}\`)\nLinked since ${parts.linkedAt}\nPUUID: \`${parts.puuid}\``,
+  riotAccountNotLinked: 'You have not linked a Riot ID yet. Use `/valo-account link`.',
+  riotAccountNotLinkedOther: (userId) => `<@${userId}> has not linked a Riot ID yet.`,
+  riotAccountRefreshed: (parts) =>
+    `Updated: you are now **${parts.riotId}** (region \`${parts.region}\`).`,
+  riotAccountUnchanged: (parts) =>
+    `Already up to date: **${parts.riotId}** (region \`${parts.region}\`).`,
+  riotAccountUnlinked: 'Your Riot ID is no longer stored.',
+  valorantApiStatus: (parts) =>
+    [
+      `**Valorant API:** ${parts.probe}`,
+      `**Limit:** ${parts.used}/${parts.limit} in the last minute, ${parts.waiting} waiting`,
+      `**Blocked:** ${parts.blocked}`,
+      `**Totals:** ${parts.requests} requests, ${parts.failures} failures, ${parts.rateLimitHits}× 429`,
+      `**Last 429:** ${parts.lastRateLimited}`,
+    ].join('\n'),
+  valorantProbeOk: (version) => `✅ reachable (game version \`${version}\`)`,
+  valorantProbeFailed: (reason) => `⚠️ ${reason}`,
+  valorantNotBlocked: 'no',
+  valorantBlockedUntil: (timestamp) => `yes, until ${timestamp}`,
+  never: 'never',
+  eloRankLabel: 'Rank',
+  eloRankValue: (tier, rr) => `${tier} · ${rr} RR`,
+  eloLastChangeLabel: 'Last match',
+  eloPeakLabel: 'Peak',
+  eloPeakValue: (tier, season) => `${tier} (${season})`,
+  eloLeaderboardLabel: 'Leaderboard',
+  eloRecord: (parts) =>
+    `${parts.matches} matches · ${parts.wins}W ${parts.losses}L · ${parts.net} elo${
+      parts.unrated === 0 ? '' : ` · ${parts.unrated} unrated`
+    }`,
+  eloNoHistory: 'no ranked matches found',
+  eloUnrated: 'unrated',
+  eloUnratedOnly: 'unrated across this window',
+  eloNoRankedData: (riotId) =>
+    `No ranked data for **${riotId}**. They may not have played placements yet.`,
+  valorantRiotIdAdminOnly:
+    'Only members who may use the config commands can look up someone else. Without the option this command uses your own linked Riot ID.',
+  matchTitle: (map, outcome) => `${map} · ${outcome}`,
+  matchOutcome: { win: 'Win', loss: 'Loss', draw: 'Draw' },
+  matchHeadline: (parts) =>
+    `**${parts.score}** · ${parts.mode} · ${parts.when} · ${parts.duration}`,
+  matchYouLabel: (agent) => `Your game (${agent})`,
+  matchYouValue: (parts) => `**${parts.kda}** · ${parts.acs} ACS · ${parts.headshots} headshots`,
+  matchTeamLabel: (averageTier) =>
+    averageTier === null ? 'Your team' : `Your team · avg ${averageTier}`,
+  matchEnemyLabel: (averageTier) =>
+    averageTier === null ? 'Enemy team' : `Enemy team · avg ${averageTier}`,
+  matchNone: (riotId) => `I could not find a recent match for **${riotId}**.`,
 };
 
 export const STRINGS: Readonly<Record<AppLocale, Strings>> = { de, en };

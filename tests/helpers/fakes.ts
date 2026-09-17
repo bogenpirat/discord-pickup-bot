@@ -1,12 +1,17 @@
 import { DatabaseSync } from 'node:sqlite';
-import type {
-  ButtonInteraction,
-  ChatInputCommandInteraction,
-  RepliableInteraction,
+import {
+  ApplicationCommandOptionType,
+  type ButtonInteraction,
+  type ChatInputCommandInteraction,
+  type CommandInteractionOption,
+  type RepliableInteraction,
 } from 'discord.js';
 import { type AppContext, createAppContext } from '../../src/app/context.ts';
+import { type AuditTrail, createAuditTrail } from '../../src/audit/trail.ts';
+import type { AuditEntry } from '../../src/audit/types.ts';
 import { migrate } from '../../src/db/migrations.ts';
 import type { Logger } from '../../src/logger.ts';
+import type { ValorantClient } from '../../src/valorant/client.ts';
 
 export const silentLogger = (): Logger =>
   ({
@@ -62,6 +67,33 @@ export const recordingLogger = (): RecordingLogger => {
   };
 };
 
+export interface RecordingAuditTrail {
+  readonly audit: AuditTrail;
+  readonly lines: string[];
+  readonly entries: () => AuditEntry[];
+}
+
+/** An audit trail that keeps the lines it would have written. */
+export const recordingAuditTrail = (): RecordingAuditTrail => {
+  const lines: string[] = [];
+  let clock = 0;
+
+  return {
+    // A clock that ticks once per read keeps `durationMs` non-zero and stable.
+    audit: createAuditTrail({
+      write: (line) => {
+        lines.push(line);
+      },
+      now: () => {
+        clock += 1;
+        return clock;
+      },
+    }),
+    lines,
+    entries: () => lines.map((line) => JSON.parse(line) as AuditEntry),
+  };
+};
+
 export interface TestContext extends AppContext {
   readonly database: DatabaseSync;
 }
@@ -69,12 +101,14 @@ export interface TestContext extends AppContext {
 export const createTestContext = (
   now = Temporal.Instant.from('2026-07-27T13:00:00Z'),
   powerUserIds: readonly string[] = [],
+  valorant: ValorantClient | null = null,
+  audit?: AuditTrail,
 ): TestContext => {
   const database = new DatabaseSync(':memory:');
   database.exec('PRAGMA foreign_keys = ON');
   migrate(database);
 
-  const context = createAppContext(database, silentLogger(), powerUserIds);
+  const context = createAppContext(database, silentLogger(), powerUserIds, null, valorant, audit);
   return { ...context, now: () => now, database };
 };
 
@@ -124,8 +158,9 @@ export const createFakeButtonInteraction = (
     customId: options.customId ?? 'pickup:respond:in:1',
     locale: options.locale ?? 'de',
     guildId,
+    channelId: 'channel-1',
     guild: guildId === null ? null : { name: options.guildName ?? 'Test Guild' },
-    user: { id: options.userId ?? 'user-1' },
+    user: { id: options.userId ?? 'user-1', username: options.userId ?? 'user-1' },
     memberPermissions: permissions(options.manageGuild ?? false),
     get deferred() {
       return state.deferred;
@@ -171,6 +206,7 @@ export interface FakeCommandOptions extends FakeInteractionOptions {
   readonly integers?: Readonly<Record<string, number | null>>;
   readonly channels?: Readonly<Record<string, { id: string } | null>>;
   readonly roles?: Readonly<Record<string, { id: string } | null>>;
+  readonly users?: Readonly<Record<string, { id: string } | null>>;
   readonly focused?: string;
   /** The channel the command was used in. */
   readonly channelId?: string;
@@ -247,13 +283,53 @@ export const createFakeCommandInteraction = (
       (options.missingChannelIds ?? []).includes(channelId) ? null : channelFor(channelId),
   };
 
+  /**
+   * What discord.js would have put on `interaction.options.data` for the options
+   * this fake was given: leaves at the top level, or nested under a subcommand.
+   * Only what a test passed shows up, the same way an unsupplied option does not.
+   */
+  const optionData = (): CommandInteractionOption[] => {
+    const leaves: CommandInteractionOption[] = [];
+
+    const add = (
+      source: Readonly<Record<string, unknown>> | undefined,
+      type: ApplicationCommandOptionType,
+      read: (raw: NonNullable<unknown>) => string | number | boolean,
+    ): void => {
+      for (const [name, raw] of Object.entries(source ?? {})) {
+        if (raw !== null && raw !== undefined) {
+          leaves.push({ name, type, value: read(raw) } as CommandInteractionOption);
+        }
+      }
+    };
+
+    const identity = (raw: NonNullable<unknown>) => raw as string | number;
+    const snowflake = (raw: NonNullable<unknown>) => (raw as { id: string }).id;
+
+    add(options.strings, ApplicationCommandOptionType.String, identity);
+    add(options.integers, ApplicationCommandOptionType.Integer, identity);
+    add(options.channels, ApplicationCommandOptionType.Channel, snowflake);
+    add(options.roles, ApplicationCommandOptionType.Role, snowflake);
+    add(options.users, ApplicationCommandOptionType.User, snowflake);
+
+    return options.subcommand === undefined
+      ? leaves
+      : [
+          {
+            name: options.subcommand,
+            type: ApplicationCommandOptionType.Subcommand,
+            options: leaves,
+          } as CommandInteractionOption,
+        ];
+  };
+
   const interaction = {
     commandName: options.commandName ?? 'pickup',
     locale: options.locale ?? 'de',
     guildId,
     channelId: invokedChannelId,
     channel: channelFor(invokedChannelId),
-    user: { id: options.userId ?? 'user-1' },
+    user: { id: options.userId ?? 'user-1', username: options.userId ?? 'user-1' },
     memberPermissions: permissions(options.manageGuild ?? false),
     member: guildId === null ? null : { roles: [...(options.roleIds ?? [])] },
     guild: guildId === null ? null : { name: options.guildName ?? 'Test Guild', channels },
@@ -265,6 +341,7 @@ export const createFakeCommandInteraction = (
       return state.replied;
     },
     options: {
+      data: optionData(),
       getSubcommand: () => options.subcommand ?? 'show',
       getString: (name: string, required?: boolean) => {
         const value = options.strings?.[name] ?? null;
@@ -288,6 +365,7 @@ export const createFakeCommandInteraction = (
         return value;
       },
       getRole: (name: string) => options.roles?.[name] ?? null,
+      getUser: (name: string) => options.users?.[name] ?? null,
       getFocused: () => options.focused ?? '',
     },
     deferReply: async (payload: unknown) => {

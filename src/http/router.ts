@@ -13,10 +13,10 @@ export const notFound = (): HttpResponse => plain(404, 'Not found');
  * whose method list does not is a 405 rather than a 404, so a mistyped verb is
  * distinguishable from a mistyped path.
  */
-export const resolveRequest = (
+export const resolveRequest = async (
   request: HttpRequest,
   routes: readonly HttpRoute[],
-): HttpResponse => {
+): Promise<HttpResponse> => {
   let methodMismatch: HttpRoute | undefined;
 
   for (const route of routes) {

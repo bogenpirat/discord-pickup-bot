@@ -3,15 +3,20 @@ import { dirname } from 'node:path';
 import { Events } from 'discord.js';
 import { createAppContext } from './app/context.ts';
 import { buildButtonRegistry, buildCommandRegistry } from './app/registries.ts';
+import { createAuditFileSink } from './audit/file.ts';
+import { createAuditTrail, createDisabledAuditTrail } from './audit/trail.ts';
 import { loadEnv } from './config/env.ts';
 import { openDatabase } from './db/database.ts';
 import { createClient } from './discord/client.ts';
 import { createSteamLinkListener } from './discord/steamLinkListener.ts';
 import { pickupCalendarRoute } from './http/routes/pickupCalendar.ts';
+import { valorantPlaygroundRoute } from './http/routes/valorantPlayground.ts';
 import { type RunningHttpServer, startHttpServer } from './http/server.ts';
+import { createRateLimiter } from './lib/rateLimiter.ts';
 import { createLogger } from './logger.ts';
 import { createSteamClient } from './steam/client.ts';
 import { startSteamWatchPoller } from './steam/poller.ts';
+import { createValorantClient, type ValorantClient } from './valorant/client.ts';
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
 
@@ -21,7 +26,47 @@ const logger = createLogger(env.LOG_LEVEL, env.NODE_ENV !== 'production');
 mkdirSync(dirname(env.DATABASE_PATH), { recursive: true });
 
 const db = openDatabase(env.DATABASE_PATH);
-const context = createAppContext(db, logger, env.POWER_USER_IDS, env.PUBLIC_BASE_URL ?? null);
+
+// Built before the API client so the client can hand it every request it makes.
+const audit =
+  env.AUDIT_LOG_PATH === undefined
+    ? createDisabledAuditTrail()
+    : createAuditTrail({ write: createAuditFileSink(env.AUDIT_LOG_PATH, logger) });
+
+logger.info(
+  env.AUDIT_LOG_PATH === undefined
+    ? { enabled: false }
+    : { enabled: true, path: env.AUDIT_LOG_PATH },
+  'audit log',
+);
+
+// Without a key the bot still runs its pickup duties; the Valorant commands are
+// registered either way and refuse at call time, because command registration
+// happens in a separate process that has no access to this context.
+const valorant: ValorantClient | null =
+  env.VALORANT_API_KEY === undefined
+    ? null
+    : createValorantClient({
+        apiKey: env.VALORANT_API_KEY,
+        limiter: createRateLimiter({ limit: env.VALORANT_RATE_LIMIT_PER_MINUTE }),
+        onRequest: audit.addApiCall,
+      });
+
+logger.info(
+  valorant === null
+    ? { enabled: false }
+    : { enabled: true, requestsPerMinute: env.VALORANT_RATE_LIMIT_PER_MINUTE },
+  'valorant api client',
+);
+
+const context = createAppContext(
+  db,
+  logger,
+  env.POWER_USER_IDS,
+  env.PUBLIC_BASE_URL ?? null,
+  valorant,
+  audit,
+);
 const commands = buildCommandRegistry();
 const buttons = buildButtonRegistry();
 const client = createClient();
@@ -43,6 +88,13 @@ client.once(Events.ClientReady, (ready) => {
   beat();
   void steamPoller.runNow();
 
+  // One request, once, for names the API otherwise leaves as bare uuids. The
+  // dump describes the game build, so it goes stale with a patch rather than
+  // with a match, and re-reading it per command would spend the rate limit on
+  // data that has not moved. Deliberately not awaited: nothing depends on it
+  // being there, and a slow content call should not hold up the gateway.
+  void context.content.load();
+
   // Started here rather than at boot: every value in a served calendar file comes
   // from SQLite except the guild name, which is read from a cache that stays empty
   // until the gateway handshake finishes. Binding a moment later costs a brief
@@ -50,6 +102,29 @@ client.once(Events.ClientReady, (ready) => {
   const baseUrl = env.PUBLIC_BASE_URL;
 
   if (baseUrl !== undefined) {
+    // The playground needs both a client to drive and a secret to hide behind;
+    // without either it is simply not part of the route table, so its path 404s
+    // exactly like any other unclaimed one.
+    const playgroundSecret = env.VALORANT_PLAYGROUND_SECRET;
+    const playground =
+      valorant === null || playgroundSecret === undefined
+        ? []
+        : [
+            valorantPlaygroundRoute({
+              client: valorant,
+              content: context.content,
+              secret: playgroundSecret,
+              logger,
+            }),
+          ];
+
+    if (playground.length > 0) {
+      logger.info(
+        { url: `${baseUrl}/pickup/${playgroundSecret}/valorant-playground` },
+        'valorant api playground served',
+      );
+    }
+
     httpServer = startHttpServer({
       port: env.HTTP_PORT,
       routes: [
@@ -59,6 +134,7 @@ client.once(Events.ClientReady, (ready) => {
           baseUrl,
           now: Date.now,
         }),
+        ...playground,
       ],
       logger,
     });

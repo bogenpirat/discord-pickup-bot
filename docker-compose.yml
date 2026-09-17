@@ -17,8 +17,13 @@ services:
       NODE_ENV: production
       DATABASE_PATH: /data/pickup.db
       HEARTBEAT_PATH: /tmp/heartbeat
+      AUDIT_LOG_PATH: /audit/audit.log
     volumes:
       - pickup-data:/data
+      # Bound to the host rather than a named volume: the point of the audit log
+      # is being readable without reaching into the container. The directory must
+      # be writable by uid 1000 — see the README.
+      - ./audit:/audit
     security_opt:
       - no-new-privileges:true
     healthcheck:

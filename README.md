@@ -29,12 +29,35 @@ Discord's own locale.
 | `/pickup-config steam-kanal <#channel>` | config access | Channel watched for Steam store links |
 | `/pickup-config steam-liste` | config access | Lists games currently being watched for release |
 | `/pickup-config steam-entfernen <id>` | config access | Stops watching a game |
+| `/valo-account verknüpfen <riot-id>` | everyone | Links your Riot ID, storing the PUUID behind it |
+| `/valo-account anzeigen [@member]` | everyone | Shows a linked Riot ID |
+| `/valo-account aktualisieren` | everyone | Re-reads your Riot ID after an account rename |
+| `/valo-account trennen` | everyone | Deletes your stored Riot ID |
+| `/valo-api status` | config access | Rate-limit usage and a live probe of the Valorant API |
+| `/elo [riot-id]` | everyone | Your rank plus a chart of how it moved, with rank ups and downs marked |
+| `/mmr [riot-id]` | everyone | Same as `/elo` |
+| `/elo-private [riot-id]` | everyone | Same as `/elo`, answered only to you |
+| `/mmr-private [riot-id]` | everyone | Same as `/elo-private` |
+| `/last [riot-id]` | everyone | Summary and scoreboard of your last match |
+| `/last-private [riot-id]` | everyone | Same as `/last`, answered only to you |
 
 `/pickup` and `/pickup-time` are aliases: same options, same behaviour, whichever name is
 easier to remember.
 
-English clients see `/valo info:`, `/valo-time time:` and
-`/pickup-config channel|role|timezone|emoji|show|admin-role|steam-channel|steam-list|steam-remove`.
+English clients see `/valo info:`, `/valo-time time:`,
+`/pickup-config channel|role|timezone|emoji|show|admin-role|steam-channel|steam-list|steam-remove`
+and `/valo-account link|show|refresh|unlink`.
+
+The `/valo-account`, `/valo-api` and `/elo` commands need `VALORANT_API_KEY` in `.env`.
+Without it they stay visible and say so when used; everything else works as before.
+
+`/elo` and `/last` read the Riot ID you linked with `/valo-account`, so link once and they
+need no arguments. The optional `riot-id:` looks someone else up instead and is limited to
+config access — it spends the bot's rate limit on a player who never opted in.
+
+Each has a `-private` twin that answers only to you. It is a separate command rather than an
+option on purpose: it is one keystroke away, and nobody posts their rank to the channel by
+forgetting to set a toggle. `/mmr` and `/mmr-private` are aliases of the `/elo` pair.
 
 ### Icons
 
@@ -68,9 +91,12 @@ breaking the message.
 Setting the **admin role itself** is deliberately narrower — only 1 and 2. Otherwise
 anyone holding the admin role could hand it to another role and widen access on their own.
 
-> `/pickup-config` intentionally carries no `default_member_permissions`, because Discord
-> would then *hide* it from power users and admin-role holders entirely. It is visible to
-> everyone and refuses at runtime instead.
+`/valo-api status` uses the same three-way check, so whoever configures the bot can also
+see whether the Valorant API is reachable and how much of the rate limit is left.
+
+> `/pickup-config` and `/valo-api` intentionally carry no `default_member_permissions`,
+> because Discord would then *hide* them from power users and admin-role holders entirely.
+> They are visible to everyone and refuse at runtime instead.
 
 ### `/valo`
 
@@ -320,6 +346,9 @@ DISCORD_DEV_GUILD_ID=the id from step 8   # optional; blank = register globally
 POWER_USER_IDS=                           # optional; see below
 PUBLIC_BASE_URL=                          # optional; blank = no web server, no iCal button
 HTTP_PORT=18080                           # only used when PUBLIC_BASE_URL is set
+VALORANT_API_KEY=                         # optional; blank = no /valo-account, no /valo-api
+VALORANT_RATE_LIMIT_PER_MINUTE=30         # requests per minute your key allows
+VALORANT_PLAYGROUND_SECRET=               # optional; blank = no API playground
 ```
 
 `PUBLIC_BASE_URL` is the address the **iCal** button points at, so it has to be reachable
@@ -340,6 +369,16 @@ exposes.
 server permissions — useful so you can configure the bot without holding Manage Server.
 One ID, or several separated by commas. Copy an ID by right-clicking a user with Developer
 Mode on (step 8) → **Copy User ID**.
+
+`VALORANT_API_KEY` is a key from the [HenrikDev dashboard](https://docs.henrikdev.xyz). Leave
+it blank and `/valo-account` and `/valo-api` refuse politely while the rest of the bot runs
+unchanged. `VALORANT_RATE_LIMIT_PER_MINUTE` must match what your key actually allows — a
+basic key gets 30. The bot queues its own requests to stay under that number, and on a `429`
+backs off, holding every queued request until the API's own reset time has passed.
+
+`VALORANT_PLAYGROUND_SECRET` additionally serves an API playground from the bot's own web
+server, so it needs `PUBLIC_BASE_URL` set as well — see
+[The API playground](#the-api-playground) for what it exposes and what guards it.
 
 ### 10. Start and register
 
@@ -416,6 +455,73 @@ changing `HTTP_PORT` in `.env` moves the container port and the host port togeth
 listens on it unless `PUBLIC_BASE_URL` is set. The health check is unrelated to the web
 server — it probes a heartbeat file, not the port.
 
+## The audit log
+
+Every slash command and every button click is appended to `audit.log` as one line of JSON,
+listing the Valorant API requests that interaction caused. `docker-compose.yml` bind-mounts
+`./audit` into the container, so the record sits next to `docker-compose.yml` on the host
+and outlives any `docker compose down`.
+
+On Linux, create the directory before the first start — Docker would otherwise create it
+owned by root, and the container runs as uid 1000:
+
+```sh
+mkdir -p audit && sudo chown 1000:1000 audit
+```
+
+Docker Desktop on Windows and macOS remaps ownership, so there the directory needs nothing.
+If the log is ever unwritable the bot logs one warning and carries on serving commands; it
+never fails an interaction over an audit entry.
+
+Outside Docker the log is off unless `AUDIT_LOG_PATH` is set.
+
+One line, wrapped here for reading:
+
+```json
+{
+  "ts": "2026-09-02T18:41:07.223Z", "v": 1, "kind": "command", "command": "elo",
+  "guildId": "1234", "channelId": "9876", "userId": "4242", "user": "julian",
+  "locale": "de", "options": { "riot-id": "Foo#EUW" },
+  "outcome": "ok", "durationMs": 842,
+  "apiCalls": [
+    { "method": "GET", "path": "/valorant/v2/account/Foo/EUW",
+      "query": { "force": true }, "status": 200, "attempts": 1, "durationMs": 310 },
+    { "method": "GET", "path": "/valorant/v3/mmr/eu/pc/Foo/EUW",
+      "status": 200, "attempts": 1, "durationMs": 404 }
+  ]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `ts` | When the interaction started, not when the line was written |
+| `v` | Schema version, so a reader can tell old lines from new ones |
+| `kind` | `command` or `button` |
+| `command`, `subcommand`, `options` | Commands only. `subcommand` is absent when there is none |
+| `action`, `pickupId`, `choice` | Buttons only. `choice` is absent on a close |
+| `outcome` | `ok`, or `error` with the thrown message in `error` |
+| `apiCalls[].attempts` | Wire attempts, so `3` means it was retried twice |
+| `apiCalls[].durationMs` | The whole request, including rate-limiter queueing and backoff |
+| `apiCalls[].status` | Status of the last attempt, or `0` when nothing ever answered |
+| `apiCalls[].error` | The `ValorantError` kind, absent when the call succeeded |
+
+Request bodies and headers are never written, so the API key cannot reach the file. Requests
+the bot makes on its own — the content dump it loads at startup, the Steam watcher, the API
+playground — belong to no interaction and are not recorded.
+
+Reading it:
+
+```sh
+tail -f audit/audit.log | jq -c              # follow along
+jq -c 'select(.userId == "4242")' audit/audit.log
+jq -r 'select(.apiCalls | length > 0) | .command' audit/audit.log | sort | uniq -c | sort -rn
+jq -c 'select(.outcome == "error")' audit/audit.log
+jq -c 'select(.apiCalls[]?.attempts > 1)' audit/audit.log   # what got retried
+```
+
+Nothing rotates the file. It is one short line per interaction, so a busy month is a few
+megabytes; point `logrotate` at it if that ever stops being true.
+
 ## Local development
 
 Requires Node 26+ (for `node:sqlite` and `Temporal`, both used without any dependency).
@@ -436,6 +542,140 @@ npm run check      # biome + tsc + tests with coverage thresholds
 | `npm run coverage` | Tests plus enforced coverage thresholds |
 | `npm run lint` / `npm run format` | Biome check / write |
 | `npm run typecheck` | `tsc` with full strictness |
+| `npm run gen:valorant:fetch` | Re-download the HenrikDev OpenAPI spec |
+| `npm run gen:valorant` | Regenerate the Valorant API types from that spec |
+
+### The Valorant API client
+
+`src/valorant/` wraps the [HenrikDev API](https://api.henrikdev.xyz) with one method per
+documented endpoint, each at its latest version. Response types are **generated** from the
+API's own OpenAPI spec, and both the spec snapshot and the generated types are committed:
+
+```sh
+npm run gen:valorant:fetch   # src/valorant/generated/openapi.json
+npm run gen:valorant         # src/valorant/generated/schema.ts
+```
+
+Committing both keeps CI off the network and makes an upstream API change show up as a
+reviewable diff. The generator runs through `npx` rather than as a devDependency, because
+`openapi-typescript` still pins TypeScript 5 as a peer while this repo is on 7. Nothing
+in the build, test or lint path needs it — `src/valorant/generated/` is excluded from Biome
+and from coverage.
+
+Every method answers a `Result`, never a thrown error:
+
+```ts
+const account = await context.valorant?.getAccount('Name', 'EUW');
+if (account?.ok) {
+  account.value.puuid;   // fully typed from the spec
+}
+```
+
+Requests are admitted by a shared sliding-window rate limiter sized to
+`VALORANT_RATE_LIMIT_PER_MINUTE`, and a `429` backs off with jitter, honouring `Retry-After`
+and `X-RateLimit-Reset` and holding every queued request until the reset has passed. A
+Riot ID is stored as its **PUUID** (`riot_accounts`), because that is the identifier that
+survives an account rename; the name and tag are cached alongside it and refreshed by
+`/valo-account aktualisieren`.
+
+### Naming the ids
+
+Much of what the API answers with is a bare uuid: a player's card and title, the act a peak
+rank was set in, the weapon behind a kill, the ceremony a round ended with. The only place
+those are named is `GET /valorant/v1/content`, a dump of the game build's entities.
+
+`src/valorant/contentCatalog.ts` reads it **once**, just after the gateway handshake, and
+`src/domain/valorant/content.ts` turns it into a lookup table — by id, and by asset path,
+which is how the raw endpoints name maps and game modes. The dump describes the *build*, so
+it goes stale with a patch rather than with a match; re-reading it per command would spend
+the rate limit on data that has not moved.
+
+```ts
+context.content.findIn('playerCards', player.customization.card)?.name;
+context.content.seasonLabel(mmr.peak.season.id);   // "V26 · AKT V", where the API said "e11a5"
+context.content.ceremony(round.ceremony)?.name;    // "CeremonyFlawless" -> "MAKELLOS"
+context.content.find('/Game/Maps/Jam/Jam')?.name;  // "Lotus", for the raw endpoints
+```
+
+Two things about it are worth knowing. The dump is **localised per request**, so one call
+answers for one language: the bot asks for `de-DE` and every name it resolves is German —
+a second language means a second dump, keyed by locale, not a translation of this one. And
+it is entirely optional: before it has loaded, without an API key, or if the call fails,
+every lookup answers `null` and each call site falls back to what the API sent — the short
+season code, or the id itself. Nothing waits on it and nothing fails with it.
+
+Not everything resolves. Level borders, party ids, team ids and puuids are not in the dump,
+and the competitive tier is a ladder position rather than an entity — `src/domain/valorant/tier.ts`
+names those.
+
+The dump names entities but does not picture them, and Riot publishes no image endpoint.
+`src/domain/valorant/media.ts` builds artwork URLs on `media.valorant-api.com`, the community
+mirror HenrikDev's own v1 account endpoint answers with — so `/valo-account verknüpfen`
+shows the linked account's player card as a thumbnail without spending a second request, and
+captions it with the card's name when the dump has been read. Ids are checked against a uuid
+pattern before they go into a URL Discord will fetch; an id the mirror does not have costs
+the picture and nothing else.
+
+### The rank chart
+
+`/elo` draws its chart in-process and attaches it to the reply, so it needs no web server and
+no image dependency. `src/lib/image/` is a PNG encoder (`node:zlib` does the compression), a
+small rasterizer and a 5x7 bitmap font; `src/ui/mmrChart.ts` composes them.
+
+The y-axis bands are not a hardcoded rank table. `elo` is a tier's base plus the rank rating
+inside it, so `elo - rr` lands exactly on the tier boundary — the chart keeps labelling itself
+correctly when Riot renames or adds a tier. Rank ups and downs come from comparing `tier.id`
+between consecutive matches, and are drawn as a marker, a guide line and a label; labels that
+would collide are pushed into a further lane.
+
+One `/elo` costs about four requests against the rate limit: both MMR endpoints are
+Riot-backed, and the API counts its own upstream call as well as yours. `/last` asks for a
+single match and costs about two.
+
+### The match summary
+
+`/last` fetches the one most recent match by **puuid** — the identifier that survives a
+rename — and reduces it to that player's view of it in `src/domain/valorant/matchSummary.ts`:
+the scoreline from their side, win/loss/draw, their own K/D/A, ACS, ADR and headshot share,
+and both scoreboards sorted by combat score with their own row marked.
+
+Per-round averages divide by the rounds *both* teams played, so ACS and ADR match what the
+in-game scoreboard showed. The scoreboards are rendered in a code block because Discord's
+proportional font turns a column of numbers into a staircase.
+
+### The API playground
+
+Set `VALORANT_PLAYGROUND_SECRET` and the bot's web server also serves a single-page
+playground for the client above:
+
+```
+<PUBLIC_BASE_URL>/pickup/<VALORANT_PLAYGROUND_SECRET>/valorant-playground
+```
+
+It sits under the same `/pickup` prefix as the calendar route, so a reverse proxy that
+already forwards `/pickup/*` to the bot needs no extra rule. The exact URL is printed once
+at startup — `docker compose logs bot | grep playground`.
+
+Pick an endpoint, fill the form it generates, and the reply comes back as formatted JSON
+with the rate-limit state next to it, and above it every id in the answer that the content
+dump can name — which is most of what makes a raw payload unreadable. The form is built from `src/valorant/catalog.ts`, a
+declarative description of every endpoint whose `invoke` calls the real typed client method
+— so an endpoint added to the client and the catalog shows up in the playground with no page
+changes. The crosshair endpoint renders its PNG instead of printing bytes.
+
+Generate the secret with something like `openssl rand -hex 24`; the config rejects anything
+under 24 characters or not URL-safe.
+
+> **Be clear about what this is.** An unguessable URL is the *only* thing in front of it —
+> there is no login. Anyone with the link can spend your rate limit and read any public
+> Valorant profile through your key. It is off unless the secret is set, it never appears in
+> a log line except once at startup, and it is served `noindex` and `no-store`, but treat
+> the URL as a credential. The four premium webhook **mutations** are implemented on the
+> client but deliberately left out of the playground, so a leaked URL cannot rewrite your
+> webhook subscriptions.
+
+Requests go through the same limiter as the Discord commands, so the playground cannot push
+the bot over its quota — it just queues behind everything else.
 
 ## Layout
 
@@ -447,6 +687,9 @@ src/discord/    client, custom ids, command and button dispatch
 src/http/       the bot's own web server: socket, route table, one route per file
 src/commands/   one file per slash command
 src/buttons/    one file per button action
+src/valorant/   HenrikDev API client, with types generated from its OpenAPI spec
+src/lib/image/  a small PNG encoder and rasterizer, used to draw the /elo chart
+src/audit/      one record per interaction: its scope, its shape, its file sink
 src/app/        composition: context and registries
 ```
 

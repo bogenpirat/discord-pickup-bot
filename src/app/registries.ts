@@ -1,7 +1,11 @@
 import { handleClose } from '../buttons/close.ts';
 import { handleRespond } from '../buttons/respond.ts';
+import { eloCommand, eloPrivateCommand } from '../commands/elo.ts';
+import { lastCommand, lastPrivateCommand } from '../commands/last.ts';
 import { pickupConfigCommand } from '../commands/pickupConfig.ts';
 import { valoCommand } from '../commands/valo.ts';
+import { valoAccountCommand } from '../commands/valoAccount.ts';
+import { valoApiCommand } from '../commands/valoApi.ts';
 import { valoTimeCommand } from '../commands/valoTime.ts';
 import { aliasCommand } from '../discord/aliasCommand.ts';
 import { type ButtonRegistry, createButtonRegistry } from '../discord/buttonRegistry.ts';
@@ -14,6 +18,14 @@ export const COMMANDS: readonly SlashCommand[] = [
   valoTimeCommand,
   aliasCommand(valoTimeCommand, 'pickup-time'),
   pickupConfigCommand,
+  valoAccountCommand,
+  valoApiCommand,
+  eloCommand,
+  aliasCommand(eloCommand, 'mmr'),
+  eloPrivateCommand,
+  aliasCommand(eloPrivateCommand, 'mmr-private'),
+  lastCommand,
+  lastPrivateCommand,
 ];
 
 export const buildCommandRegistry = (): CommandRegistry => createCommandRegistry(COMMANDS);

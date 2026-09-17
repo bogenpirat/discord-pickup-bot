@@ -63,6 +63,20 @@ export const MIGRATIONS: readonly string[] = [
   CREATE UNIQUE INDEX idx_steam_watches_guild_app ON steam_watches (guild_id, app_id);
   CREATE INDEX idx_steam_watches_next_check ON steam_watches (next_check_at);
   `,
+  `
+  -- Keyed by the Discord user rather than by (guild, user): a person's Riot
+  -- account is the same in every server, and the puuid is what survives a Riot
+  -- ID change, so it is the column everything downstream will join on.
+  CREATE TABLE riot_accounts (
+    discord_user_id TEXT PRIMARY KEY,
+    puuid           TEXT NOT NULL UNIQUE,
+    riot_name       TEXT NOT NULL,
+    riot_tag        TEXT NOT NULL,
+    region          TEXT NOT NULL,
+    linked_at       INTEGER NOT NULL,
+    refreshed_at    INTEGER NOT NULL
+  );
+  `,
 ];
 
 const readUserVersion = (db: DatabaseSync): number =>

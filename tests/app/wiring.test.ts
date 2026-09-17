@@ -41,6 +41,21 @@ describe('createAppContext', () => {
     });
     expect(context.steamWatches.listByGuild('guild-1')).toHaveLength(1);
 
+    context.riotAccounts.link(
+      {
+        discordUserId: 'u1',
+        puuid: 'puuid-1',
+        riotName: 'Name',
+        riotTag: 'EUW',
+        region: 'eu',
+      },
+      1_000,
+    );
+    expect(context.riotAccounts.find('u1')?.puuid).toBe('puuid-1');
+
+    // No key configured in this wiring, so the client is absent by design.
+    expect(context.valorant).toBeNull();
+
     db.close();
   });
 
@@ -62,13 +77,29 @@ describe('createAppContext', () => {
 describe('registries', () => {
   it('registers every slash command with unique names', () => {
     const names = COMMANDS.map((command) => command.name);
-    expect(names).toEqual(['valo', 'pickup', 'valo-time', 'pickup-time', 'pickup-config']);
+    expect(names).toEqual([
+      'valo',
+      'pickup',
+      'valo-time',
+      'pickup-time',
+      'pickup-config',
+      'valo-account',
+      'valo-api',
+      'elo',
+      'mmr',
+      'elo-private',
+      'mmr-private',
+      'last',
+      'last-private',
+    ]);
     expect(new Set(names).size).toBe(names.length);
   });
 
   it.each([
     ['pickup', 'valo'],
     ['pickup-time', 'valo-time'],
+    ['mmr', 'elo'],
+    ['mmr-private', 'elo-private'],
   ])('registers /%s as an alias of /%s', (aliasName, originalName) => {
     const alias = COMMANDS.find((command) => command.name === aliasName);
     const original = COMMANDS.find((command) => command.name === originalName);
@@ -131,11 +162,31 @@ describe('registries', () => {
     expect(names['steam-remove']).toBe('steam-entfernen');
   });
 
-  it('does not gate the config command behind default member permissions', () => {
-    const config = COMMANDS.find((command) => command.name === 'pickup-config');
-    const definition = config?.definition as { default_member_permissions?: string | null };
+  it.each(['pickup-config', 'valo-api'])(
+    'does not gate /%s behind default member permissions',
+    (name) => {
+      const command = COMMANDS.find((entry) => entry.name === name);
+      const definition = command?.definition as { default_member_permissions?: string | null };
 
-    expect(definition.default_member_permissions ?? null).toBeNull();
+      // Kept visible on purpose: the command refuses at runtime with a message
+      // that explains who may use it, rather than silently disappearing.
+      expect(definition.default_member_permissions ?? null).toBeNull();
+    },
+  );
+
+  it('localises the account subcommands to german', () => {
+    const account = COMMANDS.find((command) => command.name === 'valo-account');
+    const definition = account?.definition as {
+      options?: { name: string; name_localizations?: Record<string, string> }[];
+    };
+    const names = Object.fromEntries(
+      (definition.options ?? []).map((option) => [option.name, option.name_localizations?.['de']]),
+    );
+
+    expect(names['link']).toBe('verknüpfen');
+    expect(names['show']).toBe('anzeigen');
+    expect(names['refresh']).toBe('aktualisieren');
+    expect(names['unlink']).toBe('trennen');
   });
 
   it('builds a button registry that dispatches', async () => {

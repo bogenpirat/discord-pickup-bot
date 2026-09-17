@@ -23,12 +23,12 @@ export interface RunningHttpServer {
  * the request/response plumbing, and knows nothing about what any route serves.
  */
 export const startHttpServer = (options: HttpServerOptions): RunningHttpServer => {
-  const server = createServer((request, response) => {
+  const server = createServer(async (request, response) => {
     const method = request.method ?? 'GET';
 
     try {
       const target = new URL(request.url ?? '/', ORIGIN);
-      const resolved = resolveRequest(
+      const resolved = await resolveRequest(
         { method, pathname: target.pathname, query: target.searchParams },
         options.routes,
       );

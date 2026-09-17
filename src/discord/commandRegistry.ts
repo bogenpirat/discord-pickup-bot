@@ -4,6 +4,7 @@ import type {
   RESTPostAPIApplicationCommandsJSONBody,
 } from 'discord.js';
 import type { AppContext } from '../app/context.ts';
+import { describeCommand } from '../audit/subject.ts';
 import { resolveLocale, stringsFor } from '../ui/strings.ts';
 import { replyEphemeral } from './reply.ts';
 import type { SlashCommand } from './types.ts';
@@ -27,7 +28,9 @@ export const createCommandRegistry = (commands: readonly SlashCommand[]): Comman
       }
 
       try {
-        await command.execute(interaction, context);
+        await context.audit.record(describeCommand(interaction), () =>
+          command.execute(interaction, context),
+        );
       } catch (error) {
         context.logger.error(
           { err: error, command: interaction.commandName },

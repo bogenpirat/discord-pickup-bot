@@ -66,4 +66,50 @@ describe('string tables', () => {
     const strings = stringsFor(locale);
     expect(Object.keys(strings.choice).sort()).toEqual(['in', 'later', 'out']);
   });
+
+  it.each([...APP_LOCALES])('renders every valorant template in %s', (locale) => {
+    const strings = stringsFor(locale);
+    const account = {
+      riotId: 'Bogenpirat#EUW',
+      region: 'eu',
+      puuid: 'puuid-1',
+      linkedAt: '<t:1000:d>',
+    };
+
+    expect(strings.invalidRiotId('nope', 'because')).toContain('nope');
+    expect(strings.riotAccountNotFound('Nobody#XXX')).toContain('Nobody#XXX');
+    expect(strings.riotAccountLinked(account)).toContain('puuid-1');
+    expect(strings.riotAccountTaken('Bogenpirat#EUW', 'u1')).toContain('<@u1>');
+    expect(strings.riotAccountShown('u1', account)).toContain('<t:1000:d>');
+    expect(strings.riotAccountNotLinkedOther('u1')).toContain('<@u1>');
+    expect(strings.riotAccountRefreshed(account)).toContain('Bogenpirat#EUW');
+    expect(strings.riotAccountUnchanged(account)).toContain('Bogenpirat#EUW');
+    expect(strings.valorantProbeOk('10.0')).toContain('10.0');
+    expect(strings.valorantProbeFailed('kaputt')).toContain('kaputt');
+    expect(strings.valorantBlockedUntil('<t:1000:R>')).toContain('<t:1000:R>');
+
+    const status = strings.valorantApiStatus({
+      probe: 'ok',
+      used: 4,
+      limit: 30,
+      waiting: 1,
+      requests: 12,
+      failures: 2,
+      rateLimitHits: 3,
+      lastRateLimited: 'nie',
+      blocked: 'nein',
+    });
+    expect(status).toContain('4/30');
+    expect(status).toContain('12');
+  });
+
+  it.each([...APP_LOCALES])('names every riot id problem in %s', (locale) => {
+    const strings = stringsFor(locale);
+    expect(Object.keys(strings.riotIdProblem).sort()).toEqual([
+      'empty-name',
+      'invalid-tag',
+      'missing-tag',
+      'name-too-long',
+    ]);
+  });
 });

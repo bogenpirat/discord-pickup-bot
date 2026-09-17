@@ -35,7 +35,10 @@ describe('startSteamWatchPoller logging', () => {
     seedWatch(context, 1, NOW.epochMilliseconds + 1000);
     seedWatch(context, 2, NOW.epochMilliseconds + 2000);
 
-    const steamClient: SteamClient = { getAppDetails: async () => ({ kind: 'error' }) };
+    const steamClient: SteamClient = {
+      getAppDetails: async () => ({ kind: 'error' }),
+      getReleaseTimestamp: async () => null,
+    };
     startSteamWatchPoller(context, fakeDiscordClient(), steamClient).stop();
 
     const started = log.find('steam watch poller started');
@@ -54,6 +57,7 @@ describe('startSteamWatchPoller logging', () => {
     seedWatch(context, 2, NOW.epochMilliseconds - 1000);
 
     const steamClient: SteamClient = {
+      getReleaseTimestamp: async () => null,
       getAppDetails: async (appId) => {
         if (appId === 1) {
           throw new Error('boom');
@@ -84,7 +88,10 @@ describe('startSteamWatchPoller logging', () => {
     const context = { ...createTestContext(NOW), logger: log.logger };
     seedWatch(context, 1, NOW.epochMilliseconds + 60_000);
 
-    const steamClient: SteamClient = { getAppDetails: async () => ({ kind: 'error' }) };
+    const steamClient: SteamClient = {
+      getAppDetails: async () => ({ kind: 'error' }),
+      getReleaseTimestamp: async () => null,
+    };
     const poller = startSteamWatchPoller(context, fakeDiscordClient(), steamClient);
     log.records.length = 0;
     try {
@@ -106,6 +113,7 @@ describe('startSteamWatchPoller', () => {
 
     const calls: number[] = [];
     const steamClient: SteamClient = {
+      getReleaseTimestamp: async () => null,
       getAppDetails: async (appId) => {
         calls.push(appId);
         return { kind: 'error' };
@@ -129,6 +137,7 @@ describe('startSteamWatchPoller', () => {
 
     const calls: number[] = [];
     const steamClient: SteamClient = {
+      getReleaseTimestamp: async () => null,
       getAppDetails: async (appId) => {
         calls.push(appId);
         if (appId === 1) {
@@ -156,6 +165,7 @@ describe('startSteamWatchPoller', () => {
 
       let calls = 0;
       const steamClient: SteamClient = {
+        getReleaseTimestamp: async () => null,
         getAppDetails: async () => {
           calls += 1;
           return { kind: 'error' };
@@ -174,7 +184,10 @@ describe('startSteamWatchPoller', () => {
 
   it('stop() clears the underlying interval', () => {
     const context = createTestContext(NOW);
-    const steamClient: SteamClient = { getAppDetails: async () => ({ kind: 'error' }) };
+    const steamClient: SteamClient = {
+      getAppDetails: async () => ({ kind: 'error' }),
+      getReleaseTimestamp: async () => null,
+    };
     const clearIntervalSpy = vi.spyOn(global, 'clearInterval');
 
     const poller = startSteamWatchPoller(context, fakeDiscordClient(), steamClient, 10);

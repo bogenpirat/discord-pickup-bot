@@ -276,7 +276,7 @@ const execute = async (
         name: watch.gameName,
         status:
           watch.status === 'scheduled' && watch.releaseDate !== null
-            ? `${time(new Date(watch.releaseDate), TimestampStyles.ShortDate)} (${time(new Date(watch.releaseDate), TimestampStyles.RelativeTime)})`
+            ? `${time(new Date(watch.releaseDate), TimestampStyles.ShortDateTime)} (${time(new Date(watch.releaseDate), TimestampStyles.RelativeTime)})`
             : (watch.releaseDateText ?? strings.steamWatchPendingText),
       }),
     );

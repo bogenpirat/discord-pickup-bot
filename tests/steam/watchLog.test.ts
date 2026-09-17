@@ -32,18 +32,19 @@ describe('describeWatch', () => {
     });
   });
 
-  it('renders a scheduled release date as a local calendar day', () => {
+  it('renders a scheduled release date as a full instant', () => {
     const fields = describeWatch(
       record({
         status: 'scheduled',
-        // Midnight Berlin time on 2026-09-01 is 22:00Z the day before.
-        releaseDate: Temporal.Instant.from('2026-08-31T22:00:00Z').epochMilliseconds,
-        releaseDateText: '1 Sep, 2026',
+        // The exact release moment matters, not just the day: logging only the
+        // day hid that the watcher was firing hours early.
+        releaseDate: Temporal.Instant.from('2026-09-18T19:43:00Z').epochMilliseconds,
+        releaseDateText: '18 Sep, 2026',
       }),
     );
 
     expect(fields.status).toBe('scheduled');
-    expect(fields.releaseDate).toBe('2026-09-01');
-    expect(fields.releaseDateText).toBe('1 Sep, 2026');
+    expect(fields.releaseDate).toBe('2026-09-18T19:43:00Z');
+    expect(fields.releaseDateText).toBe('18 Sep, 2026');
   });
 });

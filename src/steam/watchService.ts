@@ -1,10 +1,9 @@
 import type { Client } from 'discord.js';
 import type { AppContext } from '../app/context.ts';
 import type { SteamWatchRecord } from '../db/repositories/steamWatchRepository.ts';
-import { classifyRelease } from '../domain/steam/classifyRelease.ts';
+import { classifyRelease, type ReleaseClassification } from '../domain/steam/classifyRelease.ts';
 import type { SteamAppDetails } from '../domain/steam/parseAppDetails.ts';
-import { nextRetryCheck, nextWeeklyCheck, releaseDayInstant } from '../domain/steam/schedule.ts';
-import { DEFAULT_TIME_ZONE } from '../domain/time/timezone.ts';
+import { nextCheckFor, nextRetryCheck } from '../domain/steam/schedule.ts';
 import { renderSteamReleaseMessage } from '../ui/steamAnnouncement.ts';
 import type { SteamClient } from './client.ts';
 import { describeWatch } from './watchLog.ts';
@@ -25,8 +24,22 @@ export interface DetectedGame {
   readonly appId: number;
 }
 
-const today = (context: AppContext): Temporal.PlainDate =>
-  context.now().toZonedDateTimeISO(DEFAULT_TIME_ZONE).toPlainDate();
+/**
+ * Steam only publishes the exact release instant on the store page, so pay for
+ * that extra request only while a game is still unreleased.
+ */
+const resolveRelease = async (
+  steamClient: SteamClient,
+  details: SteamAppDetails,
+): Promise<ReleaseClassification> =>
+  classifyRelease(
+    details.comingSoon,
+    details.releaseDateText,
+    details.comingSoon ? await steamClient.getReleaseTimestamp(details.appId) : null,
+  );
+
+const releaseDateOf = (classification: ReleaseClassification): number | null =>
+  classification.kind === 'scheduled' ? classification.at.epochMilliseconds : null;
 
 /**
  * Returns whether a watch was newly created, so the caller can react to the
@@ -74,11 +87,7 @@ export const recordDetectedGame = async (
     return false;
   }
 
-  const classification = classifyRelease(
-    lookup.details.comingSoon,
-    lookup.details.releaseDateText,
-    today(context),
-  );
+  const classification = await resolveRelease(steamClient, lookup.details);
   if (classification.kind === 'released') {
     context.logger.debug(
       { guildId: input.guildId, appId: input.appId, game: lookup.details.name },
@@ -87,10 +96,7 @@ export const recordDetectedGame = async (
     return false;
   }
 
-  const nextCheckAt =
-    classification.kind === 'pending'
-      ? nextWeeklyCheck(context.now())
-      : releaseDayInstant(classification.date);
+  const nextCheckAt = nextCheckFor(classification, context.now());
 
   context.steamWatches.create({
     guildId: input.guildId,
@@ -99,10 +105,7 @@ export const recordDetectedGame = async (
     appId: input.appId,
     gameName: lookup.details.name,
     status: classification.kind === 'pending' ? 'pending' : 'scheduled',
-    releaseDate:
-      classification.kind === 'scheduled'
-        ? releaseDayInstant(classification.date).epochMilliseconds
-        : null,
+    releaseDate: releaseDateOf(classification),
     releaseDateText: lookup.details.releaseDateText,
     nextCheckAt: nextCheckAt.epochMilliseconds,
   });
@@ -185,29 +188,19 @@ export const processDueWatch = async (
     return 'unavailable';
   }
 
-  const classification = classifyRelease(
-    lookup.details.comingSoon,
-    lookup.details.releaseDateText,
-    today(context),
-  );
+  const classification = await resolveRelease(steamClient, lookup.details);
 
   if (classification.kind === 'released') {
     const announced = await announceRelease(context, discordClient, row, lookup.details);
     return announced ? 'released' : 'announce-failed';
   }
 
-  const nextCheckAt =
-    classification.kind === 'pending'
-      ? nextWeeklyCheck(context.now())
-      : releaseDayInstant(classification.date);
+  const nextCheckAt = nextCheckFor(classification, context.now());
 
   context.steamWatches.reschedule(row.id, {
     status: classification.kind === 'pending' ? 'pending' : 'scheduled',
     gameName: lookup.details.name,
-    releaseDate:
-      classification.kind === 'scheduled'
-        ? releaseDayInstant(classification.date).epochMilliseconds
-        : null,
+    releaseDate: releaseDateOf(classification),
     releaseDateText: lookup.details.releaseDateText,
     nextCheckAt: nextCheckAt.epochMilliseconds,
   });

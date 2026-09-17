@@ -1,12 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { createSteamClient, type FetchLike } from '../../src/steam/client.ts';
+import {
+  createSteamClient,
+  type FetchLike,
+  type FetchResponseLike,
+} from '../../src/steam/client.ts';
 
 const APP_ID = 1245620;
 
+/** Fills in whichever body accessor a given test does not care about. */
 const fakeFetch =
-  (impl: (url: string) => Promise<{ ok: boolean; json(): Promise<unknown> }>): FetchLike =>
-  (url) =>
-    impl(url);
+  (impl: (url: string) => Promise<Partial<FetchResponseLike> & { ok: boolean }>): FetchLike =>
+  async (url) => {
+    const response = await impl(url);
+    return {
+      ok: response.ok,
+      json: response.json ?? (async () => ({})),
+      text: response.text ?? (async () => ''),
+    };
+  };
 
 describe('createSteamClient', () => {
   it('returns found for a successful response', async () => {

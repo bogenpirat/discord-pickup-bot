@@ -80,7 +80,7 @@ export const recordDetectedGame = async (
   }
 
   if (lookup.kind === 'invalid') {
-    context.logger.debug(
+    context.logger.info(
       { guildId: input.guildId, appId: input.appId },
       'steam app id is unknown, not watching',
     );

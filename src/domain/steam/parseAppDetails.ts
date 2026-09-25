@@ -25,6 +25,7 @@ const releaseDateSchema = z.object({
 });
 
 const appDataSchema = z.object({
+  steam_appid: z.number().optional(),
   name: z.string(),
   header_image: z.string(),
   release_date: releaseDateSchema,
@@ -38,18 +39,40 @@ const entrySchema = z.union([
 
 const responseSchema = z.record(z.string(), z.unknown());
 
+type Entry = z.infer<typeof entrySchema>;
+
+/**
+ * Steam sometimes keys the response under an alias id rather than the one
+ * requested, so fall back to the entry whose own steam_appid matches.
+ */
+const findEntry = (record: Record<string, unknown>, appId: number): Entry | undefined => {
+  const direct = entrySchema.safeParse(record[String(appId)]);
+  if (direct.success) {
+    return direct.data;
+  }
+
+  for (const value of Object.values(record)) {
+    const candidate = entrySchema.safeParse(value);
+    if (candidate.success && candidate.data.success && candidate.data.data.steam_appid === appId) {
+      return candidate.data;
+    }
+  }
+
+  return undefined;
+};
+
 export const parseAppDetailsResponse = (raw: unknown, appId: number): SteamParseResult => {
   const record = responseSchema.safeParse(raw);
   if (!record.success) {
     return { kind: 'invalid' };
   }
 
-  const parsed = entrySchema.safeParse(record.data[String(appId)]);
-  if (!parsed.success || !parsed.data.success) {
+  const entry = findEntry(record.data, appId);
+  if (entry === undefined || !entry.success) {
     return { kind: 'invalid' };
   }
 
-  const data = parsed.data.data;
+  const data = entry.data;
 
   return {
     kind: 'found',

@@ -40,6 +40,9 @@ jobs:
       - name: Tests with coverage thresholds
         run: npm run coverage
 
+      - name: Live tests against third-party services
+        run: npm run test:live
+
       - name: Compile
         run: npm run build
 

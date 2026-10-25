@@ -1,7 +1,9 @@
 import {
+  type LiveServerDetail,
   parseServerDetailResponse,
   type ServerDetailResult,
 } from '../domain/wardogs/parseServerDetail.ts';
+import { assembleBanner, type BannerImage, type ImageFetch } from './banner.ts';
 
 export type WardogsLookupResult =
   | ServerDetailResult
@@ -12,14 +14,21 @@ export type WardogsLookupResult =
 export interface WardogsFetchResponse {
   readonly ok: boolean;
   readonly status: number;
+  readonly headers: { get(name: string): string | null };
   json(): Promise<unknown>;
+  arrayBuffer(): Promise<ArrayBuffer>;
 }
 
-export type WardogsFetch = (url: string) => Promise<WardogsFetchResponse>;
+export type WardogsFetch = (
+  url: string,
+  init?: { signal: AbortSignal },
+) => Promise<WardogsFetchResponse>;
 
 export interface WardogsClient {
   /** `key` as `parseServerKey` builds it, e.g. `id|<guid>`. */
   getServerDetail(key: string): Promise<WardogsLookupResult>;
+  /** The server's own banner over the site's status card, or whichever of them exists. */
+  getBanner(detail: LiveServerDetail, now: Temporal.Instant): Promise<BannerImage | null>;
 }
 
 const SERVER_DETAIL_URL = 'https://wardogserverlist.com/api/server-detail';
@@ -32,6 +41,10 @@ const SERVER_PAGE_URL = 'https://wardogserverlist.com/server';
  */
 const CACHE_TTL_MS = 60_000;
 
+const IMAGE_TIMEOUT_MS = 5_000;
+/** Banners seen in the wild are well under 1 MB; anything far past that is not one. */
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+
 /** Errors and 429s are left out so the next attempt actually retries. */
 const isCacheable = (result: WardogsLookupResult): boolean =>
   result.kind === 'live' || result.kind === 'offline' || result.kind === 'not-found';
@@ -42,8 +55,8 @@ export const serverDetailUrl = (key: string): string =>
 /**
  * The site's rendered status card for a server: map art with name, mode and
  * player count drawn on. `wide` is the 1200×500 cut the site uses for its own
- * Discord cards. Discord caches images by URL, so `version` has to change for a
- * later post to show the card as it is now rather than as it was first fetched.
+ * Discord cards. The site's CDN caches the card for about five minutes, so
+ * `version` changes the URL with each poll to get the card as it is now.
  */
 export const bannerUrl = (linkKey: string, version: number): string =>
   `${BANNER_URL}?${new URLSearchParams({ key: linkKey, style: 'wide', v: String(version) })}`;
@@ -51,6 +64,38 @@ export const bannerUrl = (linkKey: string, version: number): string =>
 /** The server's page on the site: join code, live status and player history. */
 export const serverPageUrl = (linkKey: string): string =>
   `${SERVER_PAGE_URL}?${new URLSearchParams({ key: linkKey })}`;
+
+const isHttpsUrl = (value: string): boolean => {
+  try {
+    return new URL(value).protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Fetches an image the bot then attaches itself. Downloading it here, rather
+ * than handing Discord the URL, sidesteps image hosts that refuse Discord's
+ * proxy, which is why server banners never showed as a linked thumbnail.
+ */
+export const createImageFetch =
+  (fetchImpl: WardogsFetch = fetch): ImageFetch =>
+  async (url) => {
+    if (!isHttpsUrl(url)) {
+      return null;
+    }
+    try {
+      const response = await fetchImpl(url, { signal: AbortSignal.timeout(IMAGE_TIMEOUT_MS) });
+      const declared = Number(response.headers.get('content-length') ?? 0);
+      if (!response.ok || declared > MAX_IMAGE_BYTES) {
+        return null;
+      }
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      return bytes.length > MAX_IMAGE_BYTES ? null : bytes;
+    } catch {
+      return null;
+    }
+  };
 
 export const createWardogsClient = (
   fetchImpl: WardogsFetch = fetch,
@@ -68,6 +113,8 @@ export const createWardogsClient = (
       }
     }
   };
+
+  const fetchImage = createImageFetch(fetchImpl);
 
   const lookup = async (url: string): Promise<WardogsLookupResult> => {
     try {
@@ -103,5 +150,21 @@ export const createWardogsClient = (
       }
       return result;
     },
+
+    getBanner: (detail, now) =>
+      assembleBanner(
+        {
+          serverImageUrl: detail.server.imageUrl,
+          cardUrl:
+            detail.linkKey === null
+              ? null
+              : // Versioned by the poll the data came from, which is when the card changes.
+                bannerUrl(
+                  detail.linkKey,
+                  Math.floor((detail.updatedAt ?? now).epochMilliseconds / 1000),
+                ),
+        },
+        fetchImage,
+      ),
   };
 };

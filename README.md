@@ -40,7 +40,7 @@ Discord's own locale.
 | `/mmr-private [riot-id]` | everyone | Same as `/elo-private` |
 | `/last [riot-id]` | everyone | Summary and scoreboard of your last match |
 | `/last-private [riot-id]` | everyone | Same as `/last`, answered only to you |
-| `/wd <server-id>` | everyone | Live status of a Wardogs server from wardogserverlist.com: players, map, sky and how long the round has been running |
+| `/wd <server-id>` | everyone | Live status of a Wardogs community server from wardogserverlist.com: players, map, sky, how long the round has been running, and the server's banner over the site's status card |
 
 `/pickup` and `/pickup-time` are aliases: same options, same behaviour, whichever name is
 easier to remember.
@@ -617,6 +617,16 @@ captions it with the card's name when the dump has been read. Ids are checked ag
 pattern before they go into a URL Discord will fetch; an id the mirror does not have costs
 the picture and nothing else.
 
+### The Wardogs banner
+
+`/wd` downloads two pictures and attaches them as one: the banner the server's operator set,
+scaled to the card's width, above wardogserverlist.com's status card. Attaching rather than
+linking matters: the image hosts operators use do not reliably serve Discord's proxy, so a
+linked banner often never loaded. When only one of the two can be had it is attached as it
+came, so a WebP banner still shows on its own; when neither can, the embed has no image.
+Merging is the one place the bot decodes images, which `jpeg-js` and `pngjs` do;
+`src/lib/image/compose.ts` scales and stacks the pixels.
+
 ### The rank chart
 
 `/elo` draws its chart in-process and attaches it to the reply, so it needs no web server and
@@ -689,7 +699,9 @@ src/http/       the bot's own web server: socket, route table, one route per fil
 src/commands/   one file per slash command
 src/buttons/    one file per button action
 src/valorant/   HenrikDev API client, with types generated from its OpenAPI spec
-src/lib/image/  a small PNG encoder and rasterizer, used to draw the /elo chart
+src/lib/image/  a small PNG encoder and rasterizer for the /elo chart, plus decoding
+                and compositing for the /wd banner
+src/wardogs/    wardogserverlist.com client and the /wd banner assembly
 src/audit/      one record per interaction: its scope, its shape, its file sink
 src/app/        composition: context and registries
 ```

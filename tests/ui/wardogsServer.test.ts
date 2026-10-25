@@ -34,7 +34,7 @@ const detail = (overrides: Partial<LiveServerDetail> = {}): LiveServerDetail => 
 });
 
 const fieldsOf = (server: WardogsServer, now = NOW) =>
-  buildWardogsEmbed(detail({ server }), en, now).toJSON();
+  buildWardogsEmbed(detail({ server }), en, now, 'wardogs.jpg').toJSON();
 
 describe('humanizeSky', () => {
   it('splits the camel case', () => {
@@ -49,7 +49,7 @@ describe('buildWardogsEmbed', () => {
 
     expect(embed.title).toBe(SERVER.name);
     expect(embed.description).toBeUndefined();
-    expect(embed.thumbnail?.url).toBe(SERVER.imageUrl);
+    expect(embed.thumbnail).toBeUndefined();
     expect(embed.timestamp).toBe('2026-10-24T23:42:18.954Z');
     expect(embed.fields).toEqual([
       { name: 'Players', value: '81/100', inline: true },
@@ -78,29 +78,25 @@ describe('buildWardogsEmbed', () => {
     expect(embed.description).toBe('🔒 Password');
   });
 
-  it.each([null, 'http://example.com/a.png', 'not a url'])('skips the thumbnail %j', (imageUrl) => {
-    expect(fieldsOf({ ...SERVER, imageUrl }).thumbnail).toBeUndefined();
-  });
-
-  it('links the title to the server page and shows its banner, versioned by the poll', () => {
+  it('links the title to the server page and shows the attached banner', () => {
     const embed = fieldsOf(SERVER);
     expect(embed.url).toBe(
       'https://wardogserverlist.com/server?key=eu-central%7Casdz-alte-s%C3%A4cke-die-zocken-de-ger',
     );
-    expect(embed.image?.url).toBe(
-      'https://wardogserverlist.com/banner.jpg?key=eu-central%7Casdz-alte-s%C3%A4cke-die-zocken-de-ger&style=wide&v=1792885338',
-    );
+    expect(embed.image?.url).toBe('attachment://wardogs.jpg');
   });
 
-  it('has no timestamp without updatedAt, and versions the banner by now instead', () => {
-    const embed = buildWardogsEmbed(detail({ updatedAt: null }), en, NOW).toJSON();
+  it('has no image without an attached banner', () => {
+    expect(buildWardogsEmbed(detail(), en, NOW, null).toJSON().image).toBeUndefined();
+  });
+
+  it('has no timestamp without updatedAt', () => {
+    const embed = buildWardogsEmbed(detail({ updatedAt: null }), en, NOW, null).toJSON();
     expect(embed.timestamp).toBeUndefined();
-    expect(embed.image?.url).toContain(`&v=${Math.floor(NOW.epochMilliseconds / 1000)}`);
   });
 
-  it('has no banner or link without a link key', () => {
-    const embed = buildWardogsEmbed(detail({ linkKey: null }), en, NOW).toJSON();
-    expect(embed.image).toBeUndefined();
+  it('has no link without a link key', () => {
+    const embed = buildWardogsEmbed(detail({ linkKey: null }), en, NOW, null).toJSON();
     expect(embed.url).toBeUndefined();
   });
 });

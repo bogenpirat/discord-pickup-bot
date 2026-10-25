@@ -41,6 +41,7 @@ Discord's own locale.
 | `/last [riot-id]` | everyone | Summary and scoreboard of your last match |
 | `/last-private [riot-id]` | everyone | Same as `/last`, answered only to you |
 | `/wd <server-id>` | everyone | Live status of a Wardogs community server from wardogserverlist.com: players, map, sky, how long the round has been running, and the server's banner over the site's status card |
+| `/wd-private <server-id>` | everyone | Same as `/wd`, answered only to you |
 
 `/pickup` and `/pickup-time` are aliases: same options, same behaviour, whichever name is
 easier to remember.

@@ -1,6 +1,6 @@
 import type { APIEmbed } from 'discord.js';
 import { describe, expect, it } from 'vitest';
-import { wdCommand } from '../../src/commands/wd.ts';
+import { wdCommand, wdPrivateCommand } from '../../src/commands/wd.ts';
 import { parseServerDetailResponse } from '../../src/domain/wardogs/parseServerDetail.ts';
 import type { BannerImage } from '../../src/wardogs/banner.ts';
 import type { WardogsLookupResult } from '../../src/wardogs/client.ts';
@@ -13,15 +13,16 @@ const run = async (
   input: string,
   result: WardogsLookupResult,
   banner: BannerImage | null = null,
+  command = wdCommand,
 ) => {
   const wardogs = fakeWardogsClient(result, banner);
   const context = createTestContext(undefined, [], null, undefined, wardogs.client);
   const fake = createFakeCommandInteraction({
-    commandName: 'wd',
+    commandName: command.name,
     locale: 'en-US',
     strings: { 'server-id': input },
   });
-  await wdCommand.execute(fake.interaction, context);
+  await command.execute(fake.interaction, context);
   return { fake, wardogs };
 };
 
@@ -41,7 +42,7 @@ describe('/wd', () => {
     const { fake, wardogs } = await run(GUID, parseServerDetailResponse(SAMPLE_RESPONSE));
 
     expect(wardogs.calls).toEqual([`id|${GUID}`]);
-    expect(fake.calls[0]).toEqual({ method: 'deferReply', payload: undefined });
+    expect(fake.calls[0]).toEqual({ method: 'deferReply', payload: {} });
     expect(editedEmbeds(fake)[0]?.title).toBe('ASDZ - Alte Säcke Die Zocken | DE | GER');
   });
 
@@ -80,5 +81,32 @@ describe('/wd', () => {
   ] as const)('explains %j', async (result, text) => {
     const { fake } = await run(GUID, result);
     expect(fake.messages().join(' ')).toContain(text);
+  });
+});
+
+describe('/wd-private', () => {
+  it('defers ephemerally', async () => {
+    const { fake } = await run(
+      GUID,
+      parseServerDetailResponse(SAMPLE_RESPONSE),
+      null,
+      wdPrivateCommand,
+    );
+
+    expect(fake.calls[0]).toEqual({ method: 'deferReply', payload: { flags: 64 } });
+  });
+
+  it('produces the same reply as /wd', async () => {
+    const banner = { name: 'wardogs.jpg', bytes: Buffer.from([0xff, 0xd8, 0xff]) };
+    const open = await run(GUID, parseServerDetailResponse(SAMPLE_RESPONSE), banner);
+    const quiet = await run(
+      GUID,
+      parseServerDetailResponse(SAMPLE_RESPONSE),
+      banner,
+      wdPrivateCommand,
+    );
+
+    expect(editedEmbeds(quiet.fake)).toEqual(editedEmbeds(open.fake));
+    expect(edited(quiet.fake).files?.map((file) => file.name)).toEqual(['wardogs.jpg']);
   });
 });

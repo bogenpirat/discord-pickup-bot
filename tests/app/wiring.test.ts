@@ -92,6 +92,7 @@ describe('registries', () => {
       'last',
       'last-private',
       'wd',
+      'wd-private',
     ]);
     expect(new Set(names).size).toBe(names.length);
   });

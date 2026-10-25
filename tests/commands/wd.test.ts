@@ -1,4 +1,4 @@
-import type { APIEmbed } from 'discord.js';
+import type { APIActionRowComponent, APIButtonComponentWithURL, APIEmbed } from 'discord.js';
 import { describe, expect, it } from 'vitest';
 import { wdCommand, wdPrivateCommand } from '../../src/commands/wd.ts';
 import { parseServerDetailResponse } from '../../src/domain/wardogs/parseServerDetail.ts';
@@ -14,9 +14,13 @@ const run = async (
   result: WardogsLookupResult,
   banner: BannerImage | null = null,
   command = wdCommand,
+  publicBaseUrl: string | null = null,
 ) => {
   const wardogs = fakeWardogsClient(result, banner);
-  const context = createTestContext(undefined, [], null, undefined, wardogs.client);
+  const context = {
+    ...createTestContext(undefined, [], null, undefined, wardogs.client),
+    publicBaseUrl,
+  };
   const fake = createFakeCommandInteraction({
     commandName: command.name,
     locale: 'en-US',
@@ -29,6 +33,7 @@ const run = async (
 interface EditPayload {
   embeds?: { toJSON(): APIEmbed }[];
   files?: { name: string | null }[];
+  components?: { toJSON(): APIActionRowComponent<APIButtonComponentWithURL> }[];
 }
 
 const edited = (fake: ReturnType<typeof createFakeCommandInteraction>): EditPayload =>
@@ -61,6 +66,26 @@ describe('/wd', () => {
 
     expect(edited(fake).files).toEqual([]);
     expect(editedEmbeds(fake)[0]?.image).toBeUndefined();
+  });
+
+  it('adds a join button through the bot when it has a public url', async () => {
+    const { fake } = await run(
+      GUID,
+      parseServerDetailResponse(SAMPLE_RESPONSE),
+      null,
+      wdCommand,
+      'https://bot.example.net',
+    );
+
+    const buttons = (edited(fake).components ?? []).flatMap((row) => row.toJSON().components);
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]?.label).toBe('Join');
+    expect(buttons[0]?.url).toBe(`https://bot.example.net/pickup/wardogs/join/${GUID}?lang=en`);
+  });
+
+  it('adds no join button without a public url', async () => {
+    const { fake } = await run(GUID, parseServerDetailResponse(SAMPLE_RESPONSE));
+    expect(edited(fake).components).toEqual([]);
   });
 
   it.each(['foo', '682028'])('refuses %j privately without asking the api', async (input) => {

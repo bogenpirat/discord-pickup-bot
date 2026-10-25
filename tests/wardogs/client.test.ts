@@ -6,6 +6,7 @@ import {
   createWardogsClient,
   serverPageUrl,
   type WardogsFetch,
+  type WardogsFetchInit,
   type WardogsFetchResponse,
 } from '../../src/wardogs/client.ts';
 import { solidJpeg, solidPng } from '../helpers/images.ts';
@@ -118,6 +119,59 @@ describe('createWardogsClient', () => {
     expect((await client.getServerDetail(KEY)).kind).toBe('rate-limited');
     expect((await client.getServerDetail(KEY)).kind).toBe('live');
     expect(urls).toHaveLength(2);
+  });
+});
+
+describe('getJoinLink', () => {
+  const LINK = 'steam://joinlobby/1867240/109775242246499170';
+
+  it('posts the key as json with the site as origin', async () => {
+    const requests: { url: string; init: WardogsFetchInit | undefined }[] = [];
+    const client = createWardogsClient(async (url, init) => {
+      requests.push({ url, init });
+      return respond(200, { link: LINK, name: 'TEG.gg - EU#1' });
+    });
+
+    expect(await client.getJoinLink(KEY)).toEqual({
+      kind: 'link',
+      link: LINK,
+      name: 'TEG.gg - EU#1',
+    });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.url).toBe('https://wardogserverlist.com/discord/api/join');
+    expect(requests[0]?.init?.method).toBe('POST');
+    expect(requests[0]?.init?.headers).toMatchObject({
+      'Content-Type': 'application/json',
+      Origin: 'https://wardogserverlist.com',
+    });
+    expect(JSON.parse(requests[0]?.init?.body ?? '')).toEqual({ key: KEY });
+    expect(requests[0]?.init?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('asks afresh every time', async () => {
+    const { urls, fetchImpl } = recordingFetch(async () => respond(200, { link: LINK }));
+    const client = createWardogsClient(fetchImpl, () => 0);
+
+    await client.getJoinLink(KEY);
+    await client.getJoinLink(KEY);
+    expect(urls).toHaveLength(2);
+  });
+
+  it.each([
+    [404, 'not-found'],
+    [429, 'rate-limited'],
+    [403, 'error'],
+    [500, 'error'],
+  ])('maps status %i to %s', async (status, kind) => {
+    const { fetchImpl } = recordingFetch(async () => respond(status));
+    expect(await createWardogsClient(fetchImpl).getJoinLink(KEY)).toEqual({ kind });
+  });
+
+  it('reports a failed request as an error', async () => {
+    const { fetchImpl } = recordingFetch(async () => {
+      throw new Error('network down');
+    });
+    expect(await createWardogsClient(fetchImpl).getJoinLink(KEY)).toEqual({ kind: 'error' });
   });
 });
 

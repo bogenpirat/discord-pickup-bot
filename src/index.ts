@@ -11,6 +11,7 @@ import { createClient } from './discord/client.ts';
 import { createSteamLinkListener } from './discord/steamLinkListener.ts';
 import { pickupCalendarRoute } from './http/routes/pickupCalendar.ts';
 import { valorantPlaygroundRoute } from './http/routes/valorantPlayground.ts';
+import { wardogsJoinRoute } from './http/routes/wardogsJoin.ts';
 import { type RunningHttpServer, startHttpServer } from './http/server.ts';
 import { createRateLimiter } from './lib/rateLimiter.ts';
 import { createLogger } from './logger.ts';
@@ -134,6 +135,7 @@ client.once(Events.ClientReady, (ready) => {
           baseUrl,
           now: Date.now,
         }),
+        wardogsJoinRoute({ wardogs: context.wardogs, logger }),
         ...playground,
       ],
       logger,

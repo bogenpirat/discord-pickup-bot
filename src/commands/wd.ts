@@ -8,9 +8,10 @@ import {
 import type { AppContext } from '../app/context.ts';
 import { replyEphemeral } from '../discord/reply.ts';
 import type { SlashCommand } from '../discord/types.ts';
-import { parseServerKey } from '../domain/wardogs/serverKey.ts';
-import { resolveLocale, type Strings, stringsFor } from '../ui/strings.ts';
-import { buildWardogsEmbed } from '../ui/wardogsServer.ts';
+import { parseServerKey, serverKeyGuid } from '../domain/wardogs/serverKey.ts';
+import { wardogsJoinPath } from '../http/routes/wardogsJoin.ts';
+import { type AppLocale, resolveLocale, type Strings, stringsFor } from '../ui/strings.ts';
+import { buildWardogsComponents, buildWardogsEmbed } from '../ui/wardogsServer.ts';
 import type { WardogsLookupResult } from '../wardogs/client.ts';
 
 const SERVER_ID_OPTION = 'server-id';
@@ -56,10 +57,16 @@ const describeFailure = (result: LookupFailure, input: string, strings: Strings)
   }
 };
 
+const joinUrl = (publicBaseUrl: string | null, key: string, locale: AppLocale): string | null =>
+  publicBaseUrl === null
+    ? null
+    : `${publicBaseUrl}${wardogsJoinPath(serverKeyGuid(key))}?lang=${locale}`;
+
 const executeFor =
   (ephemeral: boolean) =>
   async (interaction: ChatInputCommandInteraction, context: AppContext): Promise<void> => {
-    const strings = stringsFor(resolveLocale(interaction.locale));
+    const locale = resolveLocale(interaction.locale);
+    const strings = stringsFor(locale);
     const input = interaction.options.getString(SERVER_ID_OPTION, true).trim();
 
     const key = parseServerKey(input);
@@ -85,6 +92,7 @@ const executeFor =
     await interaction.editReply({
       embeds: [buildWardogsEmbed(result, strings, now, banner?.name ?? null)],
       files: banner === null ? [] : [new AttachmentBuilder(banner.bytes, { name: banner.name })],
+      components: buildWardogsComponents(joinUrl(context.publicBaseUrl, key, locale), strings),
     });
   };
 

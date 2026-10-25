@@ -2,7 +2,6 @@ import {
   parseServerDetailResponse,
   type ServerDetailResult,
 } from '../domain/wardogs/parseServerDetail.ts';
-import type { ServerRef } from '../domain/wardogs/serverRef.ts';
 
 export type WardogsLookupResult =
   | ServerDetailResult
@@ -19,7 +18,8 @@ export interface WardogsFetchResponse {
 export type WardogsFetch = (url: string) => Promise<WardogsFetchResponse>;
 
 export interface WardogsClient {
-  getServerDetail(ref: ServerRef): Promise<WardogsLookupResult>;
+  /** `key` as `parseServerKey` builds it, e.g. `id|<guid>`. */
+  getServerDetail(key: string): Promise<WardogsLookupResult>;
 }
 
 const SERVER_DETAIL_URL = 'https://wardogserverlist.com/api/server-detail';
@@ -34,8 +34,8 @@ const CACHE_TTL_MS = 60_000;
 const isCacheable = (result: WardogsLookupResult): boolean =>
   result.kind === 'live' || result.kind === 'offline' || result.kind === 'not-found';
 
-export const serverDetailUrl = (ref: ServerRef): string =>
-  `${SERVER_DETAIL_URL}?${new URLSearchParams({ [ref.param]: ref.value })}`;
+export const serverDetailUrl = (key: string): string =>
+  `${SERVER_DETAIL_URL}?${new URLSearchParams({ key })}`;
 
 export const createWardogsClient = (
   fetchImpl: WardogsFetch = fetch,
@@ -73,8 +73,8 @@ export const createWardogsClient = (
   };
 
   return {
-    getServerDetail: async (ref) => {
-      const url = serverDetailUrl(ref);
+    getServerDetail: async (key) => {
+      const url = serverDetailUrl(key);
       const cached = cache.get(url);
       if (cached !== undefined && cached.expiresAt > now()) {
         return cached.result;

@@ -31,18 +31,13 @@ describe('/wd', () => {
   it('posts the server embed publicly', async () => {
     const { fake, wardogs } = await run(GUID, parseServerDetailResponse(SAMPLE_RESPONSE));
 
-    expect(wardogs.calls).toEqual([{ param: 'key', value: `id|${GUID}` }]);
+    expect(wardogs.calls).toEqual([`id|${GUID}`]);
     expect(fake.calls[0]).toEqual({ method: 'deferReply', payload: undefined });
     expect(editedEmbeds(fake)[0]?.title).toBe('ASDZ - Alte Säcke Die Zocken | DE | GER');
   });
 
-  it('looks a number up by id', async () => {
-    const { wardogs } = await run('89', { kind: 'not-found' });
-    expect(wardogs.calls).toEqual([{ param: 'id', value: '89' }]);
-  });
-
-  it('refuses an unusable id privately without asking the api', async () => {
-    const { fake, wardogs } = await run('foo', { kind: 'error' });
+  it.each(['foo', '682028'])('refuses %j privately without asking the api', async (input) => {
+    const { fake, wardogs } = await run(input, { kind: 'error' });
 
     expect(wardogs.calls).toEqual([]);
     expect(fake.calls).toHaveLength(1);
@@ -57,7 +52,7 @@ describe('/wd', () => {
     [{ kind: 'error' }, 'not responding'],
     [{ kind: 'invalid' }, 'not responding'],
   ] as const)('explains %j', async (result, text) => {
-    const { fake } = await run('89', result);
+    const { fake } = await run(GUID, result);
     expect(fake.messages().join(' ')).toContain(text);
   });
 });

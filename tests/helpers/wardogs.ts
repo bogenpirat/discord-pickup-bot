@@ -1,4 +1,3 @@
-import type { ServerRef } from '../../src/domain/wardogs/serverRef.ts';
 import type { WardogsClient, WardogsLookupResult } from '../../src/wardogs/client.ts';
 
 /** The `live` object as the API sent it for a real community server. */
@@ -44,16 +43,16 @@ export const SAMPLE_RESPONSE = {
 
 export interface FakeWardogsClient {
   readonly client: WardogsClient;
-  readonly calls: ServerRef[];
+  readonly calls: string[];
 }
 
 export const fakeWardogsClient = (result: WardogsLookupResult): FakeWardogsClient => {
-  const calls: ServerRef[] = [];
+  const calls: string[] = [];
   return {
     calls,
     client: {
-      getServerDetail: async (ref) => {
-        calls.push(ref);
+      getServerDetail: async (key) => {
+        calls.push(key);
         return result;
       },
     },

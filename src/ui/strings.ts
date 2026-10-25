@@ -104,6 +104,19 @@ export interface Strings {
   readonly matchTeamLabel: (averageTier: string | null) => string;
   readonly matchEnemyLabel: (averageTier: string | null) => string;
   readonly matchNone: (riotId: string) => string;
+  readonly wdInvalidServerId: (value: string) => string;
+  readonly wdServerNotFound: (value: string) => string;
+  readonly wdServerOffline: (value: string) => string;
+  readonly wdRateLimited: string;
+  readonly wdApiUnavailable: string;
+  readonly wdPlayersLabel: string;
+  readonly wdMapLabel: string;
+  readonly wdSkyLabel: string;
+  readonly wdRoundLabel: string;
+  /** `since` is a rendered Discord timestamp, so this layer stays free of time logic. */
+  readonly wdRoundValue: (duration: string, since: string) => string;
+  readonly wdPassworded: string;
+  readonly wdFooter: string;
 }
 
 export interface MatchHeadlineParts {
@@ -295,6 +308,21 @@ const de: Strings = {
     averageTier === null ? 'Dein Team' : `Dein Team · Ø ${averageTier}`,
   matchEnemyLabel: (averageTier) => (averageTier === null ? 'Gegner' : `Gegner · Ø ${averageTier}`),
   matchNone: (riotId) => `Für **${riotId}** habe ich kein letztes Match gefunden.`,
+  wdInvalidServerId: (value) =>
+    `„${value}“ ist keine gültige Server-ID. Erwartet wird eine GUID wie \`91052133-1e18-4af8-b54e-499ab279f446\` oder eine Zahl.`,
+  wdServerNotFound: (value) => `Zu \`${value}\` kennt wardogserverlist.com keinen Server.`,
+  wdServerOffline: (value) => `Der Server \`${value}\` ist gerade nicht online.`,
+  wdRateLimited:
+    'wardogserverlist.com hat gerade zu viele Anfragen bekommen. Bitte versuch es gleich noch einmal.',
+  wdApiUnavailable:
+    'wardogserverlist.com antwortet gerade nicht. Bitte versuch es später noch einmal.',
+  wdPlayersLabel: 'Spieler',
+  wdMapLabel: 'Karte',
+  wdSkyLabel: 'Wetter',
+  wdRoundLabel: 'Runde läuft seit',
+  wdRoundValue: (duration, since) => `${duration} (seit ${since})`,
+  wdPassworded: '🔒 Passwort',
+  wdFooter: 'wardogserverlist.com',
 };
 
 const en: Strings = {
@@ -423,6 +451,19 @@ const en: Strings = {
   matchEnemyLabel: (averageTier) =>
     averageTier === null ? 'Enemy team' : `Enemy team · avg ${averageTier}`,
   matchNone: (riotId) => `I could not find a recent match for **${riotId}**.`,
+  wdInvalidServerId: (value) =>
+    `"${value}" is not a valid server id. Use a GUID such as \`91052133-1e18-4af8-b54e-499ab279f446\` or a number.`,
+  wdServerNotFound: (value) => `wardogserverlist.com does not know a server for \`${value}\`.`,
+  wdServerOffline: (value) => `The server \`${value}\` is not online right now.`,
+  wdRateLimited: 'wardogserverlist.com is getting too many requests. Please try again shortly.',
+  wdApiUnavailable: 'wardogserverlist.com is not responding right now. Please try again later.',
+  wdPlayersLabel: 'Players',
+  wdMapLabel: 'Map',
+  wdSkyLabel: 'Sky',
+  wdRoundLabel: 'Round running for',
+  wdRoundValue: (duration, since) => `${duration} (since ${since})`,
+  wdPassworded: '🔒 Password',
+  wdFooter: 'wardogserverlist.com',
 };
 
 export const STRINGS: Readonly<Record<AppLocale, Strings>> = { de, en };

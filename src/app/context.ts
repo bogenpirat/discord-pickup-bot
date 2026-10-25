@@ -24,6 +24,7 @@ import { createKeyedMutex, type KeyedMutex } from '../lib/mutex.ts';
 import type { Logger } from '../logger.ts';
 import type { ValorantClient } from '../valorant/client.ts';
 import { type ContentCatalog, createContentCatalog } from '../valorant/contentCatalog.ts';
+import { createWardogsClient, type WardogsClient } from '../wardogs/client.ts';
 
 export interface AppContext {
   readonly db: DatabaseSync;
@@ -46,6 +47,8 @@ export interface AppContext {
    * for the whole run when there is no client to load it with.
    */
   readonly content: ContentCatalog;
+  /** The wardogserverlist.com client. Its API is public, so it is always present. */
+  readonly wardogs: WardogsClient;
   now(): Temporal.Instant;
 }
 
@@ -56,6 +59,7 @@ export const createAppContext = (
   publicBaseUrl: string | null = null,
   valorant: ValorantClient | null = null,
   audit: AuditTrail = createDisabledAuditTrail(),
+  wardogs: WardogsClient = createWardogsClient(),
 ): AppContext => ({
   db,
   settings: createGuildSettingsRepository(db),
@@ -72,5 +76,6 @@ export const createAppContext = (
   // Derived rather than passed in: it needs exactly the client and logger this
   // context already has, and one catalog per context is the point of it.
   content: createContentCatalog({ client: valorant, logger }),
+  wardogs,
   now: () => Temporal.Now.instant(),
 });

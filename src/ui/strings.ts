@@ -120,8 +120,11 @@ export interface Strings {
   readonly wdJoinButton: string;
   /** Shown on the redirect page while the browser hands over to Steam. */
   readonly wdJoinOpening: string;
-  readonly wdJoinFallback: string;
   readonly wdJoinUnavailable: string;
+  readonly wdJoinKicker: string;
+  readonly wdJoinOpenButton: string;
+  readonly wdJoinBrowserHint: string;
+  readonly wdJoinServerPage: string;
 }
 
 export interface MatchHeadlineParts {
@@ -330,8 +333,12 @@ const de: Strings = {
   wdFooter: 'wardogserverlist.com',
   wdJoinButton: 'Beitreten',
   wdJoinOpening: 'Steam wird geöffnet …',
-  wdJoinFallback: 'Falls Steam nicht aufgeht, hier klicken.',
   wdJoinUnavailable: 'Dem Server kann man gerade nicht beitreten. Vielleicht ist er offline.',
+  wdJoinKicker: 'Über Steam beitreten',
+  wdJoinOpenButton: 'In Steam öffnen',
+  wdJoinBrowserHint:
+    'Fragt dein Browser nach, wähle „Öffnen“. Steam muss laufen und angemeldet sein.',
+  wdJoinServerPage: 'Serverseite',
 };
 
 const en: Strings = {
@@ -475,8 +482,11 @@ const en: Strings = {
   wdFooter: 'wardogserverlist.com',
   wdJoinButton: 'Join',
   wdJoinOpening: 'Opening Steam …',
-  wdJoinFallback: 'If Steam does not open, click here.',
   wdJoinUnavailable: 'The server cannot be joined right now. It may be offline.',
+  wdJoinKicker: 'Join via Steam',
+  wdJoinOpenButton: 'Open in Steam',
+  wdJoinBrowserHint: 'If your browser asks, choose Open. Steam needs to be running and signed in.',
+  wdJoinServerPage: 'Server page',
 };
 
 export const STRINGS: Readonly<Record<AppLocale, Strings>> = { de, en };

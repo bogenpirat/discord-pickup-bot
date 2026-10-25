@@ -1,19 +1,34 @@
 import { parseServerKey } from '../../domain/wardogs/serverKey.ts';
 import type { Logger } from '../../logger.ts';
-import { APP_LOCALES, type AppLocale, DEFAULT_LOCALE, stringsFor } from '../../ui/strings.ts';
-import type { WardogsClient } from '../../wardogs/client.ts';
+import {
+  APP_LOCALES,
+  type AppLocale,
+  DEFAULT_LOCALE,
+  type Strings,
+  stringsFor,
+} from '../../ui/strings.ts';
+import {
+  bannerUrl,
+  serverPageUrl,
+  type WardogsClient,
+  type WardogsJoinResult,
+} from '../../wardogs/client.ts';
 import { notFound } from '../router.ts';
-import type { HttpResponse, HttpRoute } from '../types.ts';
+import type { HttpRoute } from '../types.ts';
+import { JOIN_PAGE_CSP, type JoinPageOutcome, joinPage } from '../wardogsJoinPage.ts';
 
 export interface WardogsJoinDeps {
   readonly wardogs: WardogsClient;
   readonly logger: Logger;
+  /** Versions the status card when the details do not say when they were polled. */
+  readonly now: () => number;
 }
 
 /**
  * `/pickup/wardogs/join/<guid>`: the target of the join button under `/wd`.
  * Discord only lets link buttons open http(s) URLs, so the button lands here and
- * this page hands the browser on to the `steam://joinlobby/…` link. The link is
+ * this page hands the browser on to the `steam://joinlobby/…` link, with the
+ * server's card and a button to click should the browser not follow on its own. The link is
  * asked for on each visit rather than when the message was posted, because the
  * lobby id changes whenever the server restarts.
  */
@@ -25,7 +40,7 @@ const HTML_HEADERS: Readonly<Record<string, string>> = {
   'Content-Type': 'text/html; charset=utf-8',
   'Cache-Control': 'no-store',
   'X-Robots-Tag': 'noindex, nofollow',
-  'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'",
+  'Content-Security-Policy': JOIN_PAGE_CSP,
   'Referrer-Policy': 'no-referrer',
 };
 
@@ -35,41 +50,27 @@ const isAppLocale = (value: string): value is AppLocale =>
 const localeFrom = (value: string | null): AppLocale =>
   value !== null && isAppLocale(value) ? value : DEFAULT_LOCALE;
 
-const escapeHtml = (value: string): string =>
-  value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
+const STATUS: Readonly<Record<WardogsJoinResult['kind'], number>> = {
+  link: 200,
+  'not-found': 404,
+  'rate-limited': 429,
+  invalid: 502,
+  error: 502,
+};
 
-const page = (
-  status: number,
-  locale: AppLocale,
-  title: string,
-  body: string,
-  head = '',
-): HttpResponse => ({
-  status,
-  headers: HTML_HEADERS,
-  body: `<!doctype html>
-<html lang="${locale}">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(title)}</title>
-${head}<style>
-body { font-family: system-ui, sans-serif; background: #0d0e10; color: #e6e6e6; margin: 0; padding: 3rem 1rem; text-align: center; }
-a { color: #9fb86a; }
-</style>
-</head>
-<body>
-<h1>${escapeHtml(title)}</h1>
-${body}
-</body>
-</html>
-`,
-});
+const outcomeOf = (result: WardogsJoinResult, strings: Strings): JoinPageOutcome => {
+  switch (result.kind) {
+    case 'link':
+      return { kind: 'link', link: result.link };
+    case 'not-found':
+      return { kind: 'failed', message: strings.wdJoinUnavailable };
+    case 'rate-limited':
+      return { kind: 'failed', message: strings.wdRateLimited };
+    case 'invalid':
+    case 'error':
+      return { kind: 'failed', message: strings.wdApiUnavailable };
+  }
+};
 
 export const wardogsJoinRoute = (deps: WardogsJoinDeps): HttpRoute => ({
   methods: ['GET', 'HEAD'],
@@ -82,45 +83,39 @@ export const wardogsJoinRoute = (deps: WardogsJoinDeps): HttpRoute => ({
 
     const locale = localeFrom(request.query.get('lang'));
     const strings = stringsFor(locale);
-    const result = await deps.wardogs.getJoinLink(key);
+    // The details only dress the page up — name, players, the site's card — so
+    // they are asked for alongside the link and simply left out when missing.
+    const [result, detail] = await Promise.all([
+      deps.wardogs.getJoinLink(key),
+      deps.wardogs.getServerDetail(key),
+    ]);
+    const live = detail.kind === 'live' ? detail : null;
 
-    switch (result.kind) {
-      case 'link': {
-        const link = escapeHtml(result.link);
-        const title = result.name ?? strings.wdJoinButton;
-        // A meta refresh rather than a 302: the page stays behind with a link to
-        // click if the browser asks before opening Steam, or the prompt is dismissed.
-        return page(
-          200,
-          locale,
-          title,
-          `<p>${escapeHtml(strings.wdJoinOpening)}</p>\n<p><a href="${link}">${escapeHtml(strings.wdJoinFallback)}</a></p>`,
-          `<meta http-equiv="refresh" content="0; url=${link}">\n`,
-        );
-      }
-      case 'not-found':
-        return page(
-          404,
-          locale,
-          strings.wdJoinButton,
-          `<p>${escapeHtml(strings.wdJoinUnavailable)}</p>`,
-        );
-      case 'rate-limited':
-        return page(
-          429,
-          locale,
-          strings.wdJoinButton,
-          `<p>${escapeHtml(strings.wdRateLimited)}</p>`,
-        );
-      case 'invalid':
-      case 'error':
-        deps.logger.warn({ result: result.kind, key }, 'wardogs join link lookup failed');
-        return page(
-          502,
-          locale,
-          strings.wdJoinButton,
-          `<p>${escapeHtml(strings.wdApiUnavailable)}</p>`,
-        );
+    if (result.kind === 'invalid' || result.kind === 'error') {
+      deps.logger.warn({ result: result.kind, key }, 'wardogs join link lookup failed');
     }
+
+    const linkKey = live?.linkKey ?? null;
+    return {
+      status: STATUS[result.kind],
+      headers: HTML_HEADERS,
+      body: joinPage({
+        locale,
+        strings,
+        name: live?.server.name ?? (result.kind === 'link' ? result.name : null),
+        server: live?.server ?? null,
+        cardUrl:
+          live === null || linkKey === null
+            ? null
+            : // Versioned like the `/wd` banner, by the poll the details came from.
+              bannerUrl(
+                linkKey,
+                Math.floor((live.updatedAt?.epochMilliseconds ?? deps.now()) / 1000),
+              ),
+        // The site's pages take the `id|` key as well as their own slug.
+        serverPageUrl: serverPageUrl(linkKey ?? key),
+        outcome: outcomeOf(result, strings),
+      }),
+    };
   },
 });

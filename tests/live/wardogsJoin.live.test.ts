@@ -73,7 +73,7 @@ describe('wardogserverlist.com join api', () => {
     const guid = key.slice('id|'.length);
     const response = await resolveRequest(
       { method: 'GET', pathname: `/pickup/wardogs/join/${guid}`, query: new URLSearchParams() },
-      [wardogsJoinRoute({ wardogs: createWardogsClient(), logger: silentLogger() })],
+      [wardogsJoinRoute({ wardogs: createWardogsClient(), logger: silentLogger(), now: Date.now })],
     );
 
     expect(response.status, `join page for ${key}`).toBe(200);

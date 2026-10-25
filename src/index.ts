@@ -135,7 +135,7 @@ client.once(Events.ClientReady, (ready) => {
           baseUrl,
           now: Date.now,
         }),
-        wardogsJoinRoute({ wardogs: context.wardogs, logger }),
+        wardogsJoinRoute({ wardogs: context.wardogs, logger, now: Date.now }),
         ...playground,
       ],
       logger,

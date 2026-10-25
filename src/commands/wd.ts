@@ -1,4 +1,5 @@
 import {
+  AttachmentBuilder,
   type ChatInputCommandInteraction,
   InteractionContextType,
   SlashCommandBuilder,
@@ -71,8 +72,11 @@ const execute = async (
     return;
   }
 
+  const now = context.now();
+  const banner = await context.wardogs.getBanner(result, now);
   await interaction.editReply({
-    embeds: [buildWardogsEmbed(result, strings, context.now())],
+    embeds: [buildWardogsEmbed(result, strings, now, banner?.name ?? null)],
+    files: banner === null ? [] : [new AttachmentBuilder(banner.bytes, { name: banner.name })],
   });
 };
 

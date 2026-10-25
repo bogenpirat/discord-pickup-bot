@@ -1,3 +1,4 @@
+import type { BannerImage } from '../../src/wardogs/banner.ts';
 import type { WardogsClient, WardogsLookupResult } from '../../src/wardogs/client.ts';
 
 /** The `live` object as the API sent it for a real community server. */
@@ -47,7 +48,10 @@ export interface FakeWardogsClient {
   readonly calls: string[];
 }
 
-export const fakeWardogsClient = (result: WardogsLookupResult): FakeWardogsClient => {
+export const fakeWardogsClient = (
+  result: WardogsLookupResult,
+  banner: BannerImage | null = null,
+): FakeWardogsClient => {
   const calls: string[] = [];
   return {
     calls,
@@ -56,6 +60,7 @@ export const fakeWardogsClient = (result: WardogsLookupResult): FakeWardogsClien
         calls.push(key);
         return result;
       },
+      getBanner: async () => banner,
     },
   };
 };

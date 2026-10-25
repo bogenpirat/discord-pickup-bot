@@ -1,6 +1,6 @@
 import { EmbedBuilder, TimestampStyles, time } from 'discord.js';
 import { type LiveServerDetail, roundElapsedMs } from '../domain/wardogs/parseServerDetail.ts';
-import { bannerUrl, serverPageUrl } from '../wardogs/client.ts';
+import { serverPageUrl } from '../wardogs/client.ts';
 import { formatDuration } from './matchSummary.ts';
 import type { Strings } from './strings.ts';
 
@@ -9,18 +9,12 @@ const WARDOGS_OLIVE = 0x4b5320;
 /** `DayLateGrayFog` → `Day Late Gray Fog`. */
 export const humanizeSky = (sky: string): string => sky.replace(/([a-z])([A-Z])/g, '$1 $2');
 
-const isHttpsUrl = (value: string): boolean => {
-  try {
-    return new URL(value).protocol === 'https:';
-  } catch {
-    return false;
-  }
-};
-
 export const buildWardogsEmbed = (
   detail: LiveServerDetail,
   strings: Strings,
   now: Temporal.Instant,
+  /** File name of an attached banner to show as the image, or null for none. */
+  imageName: string | null,
 ): EmbedBuilder => {
   const { server, updatedAt, linkKey } = detail;
   const embed = new EmbedBuilder()
@@ -55,17 +49,14 @@ export const buildWardogsEmbed = (
     });
   }
 
-  if (server.imageUrl !== null && isHttpsUrl(server.imageUrl)) {
-    embed.setThumbnail(server.imageUrl);
-  }
   if (updatedAt !== null) {
     embed.setTimestamp(new Date(updatedAt.epochMilliseconds));
   }
   if (linkKey !== null) {
     embed.setURL(serverPageUrl(linkKey));
-    // Versioned by the poll the data came from, which is when the card changes.
-    const version = Math.floor((updatedAt ?? now).epochMilliseconds / 1000);
-    embed.setImage(bannerUrl(linkKey, version));
+  }
+  if (imageName !== null) {
+    embed.setImage(`attachment://${imageName}`);
   }
 
   return embed;

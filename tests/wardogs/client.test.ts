@@ -1,20 +1,32 @@
 import { describe, expect, it } from 'vitest';
+import type { LiveServerDetail } from '../../src/domain/wardogs/parseServerDetail.ts';
 import {
   bannerUrl,
+  createImageFetch,
   createWardogsClient,
   serverPageUrl,
   type WardogsFetch,
   type WardogsFetchResponse,
 } from '../../src/wardogs/client.ts';
+import { solidJpeg, solidPng } from '../helpers/images.ts';
 import { SAMPLE_RESPONSE } from '../helpers/wardogs.ts';
 
 const KEY = 'id|91052133-1e18-4af8-b54e-499ab279f446';
 const OTHER_KEY = 'id|00000000-0000-0000-0000-000000000000';
 
-const respond = (status: number, body: unknown = {}): WardogsFetchResponse => ({
+const respond = (
+  status: number,
+  body: unknown = {},
+  headers: Readonly<Record<string, string>> = {},
+): WardogsFetchResponse => ({
   ok: status >= 200 && status < 300,
   status,
+  headers: { get: (name) => headers[name.toLowerCase()] ?? null },
   json: async () => body,
+  arrayBuffer: async () => {
+    const bytes = body instanceof Uint8Array ? body : new Uint8Array(0);
+    return new Uint8Array(bytes).buffer;
+  },
 });
 
 const recordingFetch = (impl: (url: string) => Promise<WardogsFetchResponse>) => {
@@ -106,5 +118,103 @@ describe('createWardogsClient', () => {
     expect((await client.getServerDetail(KEY)).kind).toBe('rate-limited');
     expect((await client.getServerDetail(KEY)).kind).toBe('live');
     expect(urls).toHaveLength(2);
+  });
+});
+
+describe('createImageFetch', () => {
+  const IMAGE_URL = 'https://files.example/banner.png';
+  const IMAGE = solidPng(2, 2, [1, 2, 3, 255]);
+
+  it('downloads the bytes with a timeout signal', async () => {
+    let signal: AbortSignal | undefined;
+    const fetchImage = createImageFetch(async (_url, init) => {
+      signal = init?.signal;
+      return respond(200, IMAGE);
+    });
+
+    expect(await fetchImage(IMAGE_URL)).toEqual(new Uint8Array(IMAGE));
+    expect(signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('refuses anything but https without asking', async () => {
+    const { urls, fetchImpl } = recordingFetch(async () => respond(200, IMAGE));
+    const fetchImage = createImageFetch(fetchImpl);
+
+    expect(await fetchImage('http://files.example/banner.png')).toBeNull();
+    expect(await fetchImage('not a url')).toBeNull();
+    expect(urls).toEqual([]);
+  });
+
+  it.each([
+    ['a failed status', respond(404, IMAGE)],
+    ['a declared size past the cap', respond(200, IMAGE, { 'content-length': String(9e6) })],
+    ['a body past the cap', respond(200, new Uint8Array(8 * 1024 * 1024 + 1))],
+  ])('returns null for %s', async (_label, response) => {
+    expect(await createImageFetch(async () => response)(IMAGE_URL)).toBeNull();
+  });
+
+  it('returns null when the request throws', async () => {
+    const fetchImage = createImageFetch(async () => {
+      throw new Error('timed out');
+    });
+    expect(await fetchImage(IMAGE_URL)).toBeNull();
+  });
+});
+
+describe('getBanner', () => {
+  const NOW = Temporal.Instant.from('2026-10-25T00:00:00Z');
+
+  const live = (overrides: Partial<LiveServerDetail> = {}): LiveServerDetail => ({
+    kind: 'live',
+    updatedAt: Temporal.Instant.from('2026-10-24T23:42:18.954Z'),
+    linkKey: 'eu-central|asdz',
+    server: {
+      name: 'ASDZ',
+      players: 81,
+      maxPlayers: 100,
+      map: 'Madrid',
+      world: 'Europe',
+      sky: 'DayClear',
+      matchStart: null,
+      passworded: false,
+      imageUrl: 'https://files.example/asdz.png',
+    },
+    ...overrides,
+  });
+
+  it('fetches the server banner and the card versioned by the poll, and merges them', async () => {
+    const { urls, fetchImpl } = recordingFetch(async (url) =>
+      respond(
+        200,
+        url.includes('banner.jpg')
+          ? solidJpeg(12, 5, [0, 0, 255])
+          : solidPng(4, 1, [255, 0, 0, 255]),
+      ),
+    );
+
+    const banner = await createWardogsClient(fetchImpl).getBanner(live(), NOW);
+
+    expect(urls.sort()).toEqual([
+      'https://files.example/asdz.png',
+      'https://wardogserverlist.com/banner.jpg?key=eu-central%7Casdz&style=wide&v=1792885338',
+    ]);
+    expect(banner?.name).toBe('wardogs.jpg');
+  });
+
+  it('versions the card by now when the poll time is unknown', async () => {
+    const { urls, fetchImpl } = recordingFetch(async () => respond(404));
+
+    await createWardogsClient(fetchImpl).getBanner(live({ updatedAt: null }), NOW);
+
+    expect(urls).toContain(
+      `https://wardogserverlist.com/banner.jpg?key=eu-central%7Casdz&style=wide&v=${NOW.epochMilliseconds / 1000}`,
+    );
+  });
+
+  it('asks for no card without a link key', async () => {
+    const { urls, fetchImpl } = recordingFetch(async () => respond(404));
+
+    expect(await createWardogsClient(fetchImpl).getBanner(live({ linkKey: null }), NOW)).toBeNull();
+    expect(urls).toEqual(['https://files.example/asdz.png']);
   });
 });

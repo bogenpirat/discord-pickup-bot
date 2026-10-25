@@ -87,6 +87,10 @@ describe('string tables', () => {
     expect(strings.valorantProbeOk('10.0')).toContain('10.0');
     expect(strings.valorantProbeFailed('kaputt')).toContain('kaputt');
     expect(strings.valorantBlockedUntil('<t:1000:R>')).toContain('<t:1000:R>');
+    expect(strings.wdInvalidServerId('foo')).toContain('foo');
+    expect(strings.wdServerNotFound('89')).toContain('89');
+    expect(strings.wdServerOffline('89')).toContain('89');
+    expect(strings.wdRoundValue('1h 22m', '<t:1000:t>')).toContain('<t:1000:t>');
 
     const status = strings.valorantApiStatus({
       probe: 'ok',

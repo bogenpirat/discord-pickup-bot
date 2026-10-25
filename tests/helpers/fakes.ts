@@ -12,6 +12,7 @@ import type { AuditEntry } from '../../src/audit/types.ts';
 import { migrate } from '../../src/db/migrations.ts';
 import type { Logger } from '../../src/logger.ts';
 import type { ValorantClient } from '../../src/valorant/client.ts';
+import type { WardogsClient } from '../../src/wardogs/client.ts';
 
 export const silentLogger = (): Logger =>
   ({
@@ -103,12 +104,21 @@ export const createTestContext = (
   powerUserIds: readonly string[] = [],
   valorant: ValorantClient | null = null,
   audit?: AuditTrail,
+  wardogs?: WardogsClient,
 ): TestContext => {
   const database = new DatabaseSync(':memory:');
   database.exec('PRAGMA foreign_keys = ON');
   migrate(database);
 
-  const context = createAppContext(database, silentLogger(), powerUserIds, null, valorant, audit);
+  const context = createAppContext(
+    database,
+    silentLogger(),
+    powerUserIds,
+    null,
+    valorant,
+    audit,
+    wardogs,
+  );
   return { ...context, now: () => now, database };
 };
 

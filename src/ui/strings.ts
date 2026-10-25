@@ -309,7 +309,7 @@ const de: Strings = {
   matchEnemyLabel: (averageTier) => (averageTier === null ? 'Gegner' : `Gegner · Ø ${averageTier}`),
   matchNone: (riotId) => `Für **${riotId}** habe ich kein letztes Match gefunden.`,
   wdInvalidServerId: (value) =>
-    `„${value}“ ist keine gültige Server-ID. Erwartet wird eine GUID wie \`91052133-1e18-4af8-b54e-499ab279f446\` oder eine Zahl.`,
+    `„${value}“ ist keine gültige Server-ID. Erwartet wird der Join-Code eines Community-Servers, eine GUID wie \`91052133-1e18-4af8-b54e-499ab279f446\`.`,
   wdServerNotFound: (value) => `Zu \`${value}\` kennt wardogserverlist.com keinen Server.`,
   wdServerOffline: (value) => `Der Server \`${value}\` ist gerade nicht online.`,
   wdRateLimited:
@@ -452,7 +452,7 @@ const en: Strings = {
     averageTier === null ? 'Enemy team' : `Enemy team · avg ${averageTier}`,
   matchNone: (riotId) => `I could not find a recent match for **${riotId}**.`,
   wdInvalidServerId: (value) =>
-    `"${value}" is not a valid server id. Use a GUID such as \`91052133-1e18-4af8-b54e-499ab279f446\` or a number.`,
+    `"${value}" is not a valid server id. Use a community server's join code, a GUID such as \`91052133-1e18-4af8-b54e-499ab279f446\`.`,
   wdServerNotFound: (value) => `wardogserverlist.com does not know a server for \`${value}\`.`,
   wdServerOffline: (value) => `The server \`${value}\` is not online right now.`,
   wdRateLimited: 'wardogserverlist.com is getting too many requests. Please try again shortly.',

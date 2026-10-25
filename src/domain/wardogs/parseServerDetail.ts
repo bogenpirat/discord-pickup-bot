@@ -9,19 +9,21 @@ export interface WardogsServer {
   readonly sky: string;
   /** Epoch ms the current round started, or null when the server does not report one. */
   readonly matchStart: number | null;
-  readonly region: string | null;
-  readonly gameMode: string | null;
   readonly passworded: boolean;
   readonly imageUrl: string | null;
 }
 
+export interface LiveServerDetail {
+  readonly kind: 'live';
+  readonly server: WardogsServer;
+  /** When the site last polled the server, if it says. */
+  readonly updatedAt: Temporal.Instant | null;
+  /** The site's own key for the server, e.g. `eu-central|<slug>`; what its pages and banner use. */
+  readonly linkKey: string | null;
+}
+
 export type ServerDetailResult =
-  | {
-      readonly kind: 'live';
-      readonly server: WardogsServer;
-      /** When the site last polled the server, if it says. */
-      readonly updatedAt: Temporal.Instant | null;
-    }
+  | LiveServerDetail
   /** Known to the site, but not currently listed by the game. */
   | { readonly kind: 'offline' }
   | { readonly kind: 'invalid' };
@@ -34,14 +36,14 @@ const liveSchema = z.object({
   world: z.string(),
   sky: z.string(),
   matchStart: z.number().nullish(),
-  region: z.string().nullish(),
-  gameMode: z.string().nullish(),
   passworded: z.boolean().nullish(),
   imageUrl: z.string().nullish(),
+  linkKey: z.string().nullish(),
 });
 
 const responseSchema = z.object({
   updatedAt: z.string().nullish(),
+  linkKey: z.string().nullish(),
   live: liveSchema.nullish(),
 });
 
@@ -65,7 +67,7 @@ export const parseServerDetailResponse = (raw: unknown): ServerDetailResult => {
     return { kind: 'invalid' };
   }
 
-  const { live, updatedAt } = parsed.data;
+  const { live, updatedAt, linkKey } = parsed.data;
   if (live === null || live === undefined) {
     return { kind: 'offline' };
   }
@@ -73,6 +75,7 @@ export const parseServerDetailResponse = (raw: unknown): ServerDetailResult => {
   return {
     kind: 'live',
     updatedAt: parseInstant(updatedAt),
+    linkKey: nonEmpty(linkKey) ?? nonEmpty(live.linkKey),
     server: {
       name: live.name,
       players: live.players,
@@ -81,8 +84,6 @@ export const parseServerDetailResponse = (raw: unknown): ServerDetailResult => {
       world: live.world,
       sky: live.sky,
       matchStart: live.matchStart ?? null,
-      region: nonEmpty(live.region),
-      gameMode: nonEmpty(live.gameMode),
       passworded: live.passworded ?? false,
       imageUrl: nonEmpty(live.imageUrl),
     },

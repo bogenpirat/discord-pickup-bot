@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  bannerUrl,
   createWardogsClient,
+  serverPageUrl,
   type WardogsFetch,
   type WardogsFetchResponse,
 } from '../../src/wardogs/client.ts';
 import { SAMPLE_RESPONSE } from '../helpers/wardogs.ts';
 
-const KEY_REF = { param: 'key', value: 'id|91052133-1e18-4af8-b54e-499ab279f446' } as const;
-const ID_REF = { param: 'id', value: '89' } as const;
+const KEY = 'id|91052133-1e18-4af8-b54e-499ab279f446';
+const OTHER_KEY = 'id|00000000-0000-0000-0000-000000000000';
 
 const respond = (status: number, body: unknown = {}): WardogsFetchResponse => ({
   ok: status >= 200 && status < 300,
@@ -24,22 +26,31 @@ const recordingFetch = (impl: (url: string) => Promise<WardogsFetchResponse>) =>
   return { urls, fetchImpl };
 };
 
+describe('bannerUrl', () => {
+  it('asks for the wide card with the key encoded and a version', () => {
+    expect(bannerUrl('eu-central|asdz-alte-säcke', 1792885338)).toBe(
+      'https://wardogserverlist.com/banner.jpg?key=eu-central%7Casdz-alte-s%C3%A4cke&style=wide&v=1792885338',
+    );
+  });
+});
+
+describe('serverPageUrl', () => {
+  it('links the server page by its encoded key', () => {
+    expect(serverPageUrl('eu-central|asdz-alte-säcke')).toBe(
+      'https://wardogserverlist.com/server?key=eu-central%7Casdz-alte-s%C3%A4cke',
+    );
+  });
+});
+
 describe('createWardogsClient', () => {
   it('asks by key with the pipe encoded and no window', async () => {
     const { urls, fetchImpl } = recordingFetch(async () => respond(200, SAMPLE_RESPONSE));
-    const result = await createWardogsClient(fetchImpl).getServerDetail(KEY_REF);
+    const result = await createWardogsClient(fetchImpl).getServerDetail(KEY);
 
     expect(urls).toEqual([
       'https://wardogserverlist.com/api/server-detail?key=id%7C91052133-1e18-4af8-b54e-499ab279f446',
     ]);
     expect(result.kind).toBe('live');
-  });
-
-  it('asks by id for a numeric reference', async () => {
-    const { urls, fetchImpl } = recordingFetch(async () => respond(200, SAMPLE_RESPONSE));
-    await createWardogsClient(fetchImpl).getServerDetail(ID_REF);
-
-    expect(urls).toEqual(['https://wardogserverlist.com/api/server-detail?id=89']);
   });
 
   it.each([
@@ -48,14 +59,14 @@ describe('createWardogsClient', () => {
     [500, 'error'],
   ])('maps status %i to %s', async (status, kind) => {
     const { fetchImpl } = recordingFetch(async () => respond(status));
-    expect(await createWardogsClient(fetchImpl).getServerDetail(ID_REF)).toEqual({ kind });
+    expect(await createWardogsClient(fetchImpl).getServerDetail(KEY)).toEqual({ kind });
   });
 
   it('reports a failed request as an error', async () => {
     const { fetchImpl } = recordingFetch(async () => {
       throw new Error('network down');
     });
-    expect(await createWardogsClient(fetchImpl).getServerDetail(ID_REF)).toEqual({
+    expect(await createWardogsClient(fetchImpl).getServerDetail(KEY)).toEqual({
       kind: 'error',
     });
   });
@@ -65,23 +76,23 @@ describe('createWardogsClient', () => {
     const { urls, fetchImpl } = recordingFetch(async () => respond(200, SAMPLE_RESPONSE));
     const client = createWardogsClient(fetchImpl, () => clock);
 
-    await client.getServerDetail(KEY_REF);
+    await client.getServerDetail(KEY);
     clock = 59_999;
-    await client.getServerDetail(KEY_REF);
+    await client.getServerDetail(KEY);
     expect(urls).toHaveLength(1);
 
     clock = 60_000;
-    await client.getServerDetail(KEY_REF);
+    await client.getServerDetail(KEY);
     expect(urls).toHaveLength(2);
   });
 
-  it('caches per reference', async () => {
+  it('caches per key', async () => {
     const { urls, fetchImpl } = recordingFetch(async () => respond(404));
     const client = createWardogsClient(fetchImpl, () => 0);
 
-    await client.getServerDetail(KEY_REF);
-    await client.getServerDetail(ID_REF);
-    await client.getServerDetail(ID_REF);
+    await client.getServerDetail(KEY);
+    await client.getServerDetail(OTHER_KEY);
+    await client.getServerDetail(OTHER_KEY);
     expect(urls).toHaveLength(2);
   });
 
@@ -92,8 +103,8 @@ describe('createWardogsClient', () => {
     );
     const client = createWardogsClient(fetchImpl, () => 0);
 
-    expect((await client.getServerDetail(ID_REF)).kind).toBe('rate-limited');
-    expect((await client.getServerDetail(ID_REF)).kind).toBe('live');
+    expect((await client.getServerDetail(KEY)).kind).toBe('rate-limited');
+    expect((await client.getServerDetail(KEY)).kind).toBe('live');
     expect(urls).toHaveLength(2);
   });
 });

@@ -1,4 +1,3 @@
-import type { ServerRef } from '../../src/domain/wardogs/serverRef.ts';
 import type { WardogsClient, WardogsLookupResult } from '../../src/wardogs/client.ts';
 
 /** The `live` object as the API sent it for a real community server. */
@@ -37,6 +36,7 @@ export const SAMPLE_LIVE = {
 
 export const SAMPLE_RESPONSE = {
   key: 'id|91052133-1e18-4af8-b54e-499ab279f446',
+  linkKey: 'eu-central|asdz-alte-säcke-die-zocken-de-ger',
   window: '7d',
   updatedAt: '2026-10-24T23:42:18.954Z',
   live: SAMPLE_LIVE,
@@ -44,16 +44,16 @@ export const SAMPLE_RESPONSE = {
 
 export interface FakeWardogsClient {
   readonly client: WardogsClient;
-  readonly calls: ServerRef[];
+  readonly calls: string[];
 }
 
 export const fakeWardogsClient = (result: WardogsLookupResult): FakeWardogsClient => {
-  const calls: ServerRef[] = [];
+  const calls: string[] = [];
   return {
     calls,
     client: {
-      getServerDetail: async (ref) => {
-        calls.push(ref);
+      getServerDetail: async (key) => {
+        calls.push(key);
         return result;
       },
     },

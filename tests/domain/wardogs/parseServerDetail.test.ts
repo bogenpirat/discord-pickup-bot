@@ -10,6 +10,7 @@ describe('parseServerDetailResponse', () => {
     expect(parseServerDetailResponse(SAMPLE_RESPONSE)).toEqual({
       kind: 'live',
       updatedAt: Temporal.Instant.from('2026-10-24T23:42:18.954Z'),
+      linkKey: 'eu-central|asdz-alte-säcke-die-zocken-de-ger',
       server: {
         name: 'ASDZ - Alte Säcke Die Zocken | DE | GER',
         players: 81,
@@ -18,8 +19,6 @@ describe('parseServerDetailResponse', () => {
         world: 'Europe',
         sky: 'DayClear',
         matchStart: 1792884010275,
-        region: 'eu-central',
-        gameMode: 'KOTH',
         passworded: false,
         imageUrl: 'https://files.catbox.moe/32cmfy.png',
       },
@@ -41,14 +40,22 @@ describe('parseServerDetailResponse', () => {
     expect(result).toEqual({
       kind: 'live',
       updatedAt: null,
+      linkKey: null,
       server: expect.objectContaining({
         matchStart: null,
-        region: null,
-        gameMode: null,
         passworded: false,
         imageUrl: null,
       }),
     });
+  });
+
+  it('falls back to the live link key when the top-level one is missing', () => {
+    const result = parseServerDetailResponse({
+      live: { ...SAMPLE_LIVE, linkKey: 'inst|65c46775-287a-4f34-b90f-c69c6b93cce0' },
+    });
+    expect(result.kind === 'live' && result.linkKey).toBe(
+      'inst|65c46775-287a-4f34-b90f-c69c6b93cce0',
+    );
   });
 
   it('ignores an unreadable updatedAt', () => {

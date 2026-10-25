@@ -117,6 +117,11 @@ export interface Strings {
   readonly wdRoundValue: (duration: string, since: string) => string;
   readonly wdPassworded: string;
   readonly wdFooter: string;
+  readonly wdJoinButton: string;
+  /** Shown on the redirect page while the browser hands over to Steam. */
+  readonly wdJoinOpening: string;
+  readonly wdJoinFallback: string;
+  readonly wdJoinUnavailable: string;
 }
 
 export interface MatchHeadlineParts {
@@ -323,6 +328,10 @@ const de: Strings = {
   wdRoundValue: (duration, since) => `${duration} (seit ${since})`,
   wdPassworded: '🔒 Passwort',
   wdFooter: 'wardogserverlist.com',
+  wdJoinButton: 'Beitreten',
+  wdJoinOpening: 'Steam wird geöffnet …',
+  wdJoinFallback: 'Falls Steam nicht aufgeht, hier klicken.',
+  wdJoinUnavailable: 'Dem Server kann man gerade nicht beitreten. Vielleicht ist er offline.',
 };
 
 const en: Strings = {
@@ -464,6 +473,10 @@ const en: Strings = {
   wdRoundValue: (duration, since) => `${duration} (since ${since})`,
   wdPassworded: '🔒 Password',
   wdFooter: 'wardogserverlist.com',
+  wdJoinButton: 'Join',
+  wdJoinOpening: 'Opening Steam …',
+  wdJoinFallback: 'If Steam does not open, click here.',
+  wdJoinUnavailable: 'The server cannot be joined right now. It may be offline.',
 };
 
 export const STRINGS: Readonly<Record<AppLocale, Strings>> = { de, en };

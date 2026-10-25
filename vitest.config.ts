@@ -1,9 +1,11 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],
+    // Hit real services; run on their own with `npm run test:live`.
+    exclude: [...configDefaults.exclude, 'tests/live/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],

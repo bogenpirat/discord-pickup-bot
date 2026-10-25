@@ -1,6 +1,6 @@
-import type { APIEmbed } from 'discord.js';
+import type { APIActionRowComponent, APIButtonComponentWithURL, APIEmbed } from 'discord.js';
 import { describe, expect, it } from 'vitest';
-import { wdCommand } from '../../src/commands/wd.ts';
+import { wdCommand, wdPrivateCommand } from '../../src/commands/wd.ts';
 import { parseServerDetailResponse } from '../../src/domain/wardogs/parseServerDetail.ts';
 import type { BannerImage } from '../../src/wardogs/banner.ts';
 import type { WardogsLookupResult } from '../../src/wardogs/client.ts';
@@ -13,21 +13,27 @@ const run = async (
   input: string,
   result: WardogsLookupResult,
   banner: BannerImage | null = null,
+  command = wdCommand,
+  publicBaseUrl: string | null = null,
 ) => {
   const wardogs = fakeWardogsClient(result, banner);
-  const context = createTestContext(undefined, [], null, undefined, wardogs.client);
+  const context = {
+    ...createTestContext(undefined, [], null, undefined, wardogs.client),
+    publicBaseUrl,
+  };
   const fake = createFakeCommandInteraction({
-    commandName: 'wd',
+    commandName: command.name,
     locale: 'en-US',
     strings: { 'server-id': input },
   });
-  await wdCommand.execute(fake.interaction, context);
+  await command.execute(fake.interaction, context);
   return { fake, wardogs };
 };
 
 interface EditPayload {
   embeds?: { toJSON(): APIEmbed }[];
   files?: { name: string | null }[];
+  components?: { toJSON(): APIActionRowComponent<APIButtonComponentWithURL> }[];
 }
 
 const edited = (fake: ReturnType<typeof createFakeCommandInteraction>): EditPayload =>
@@ -41,7 +47,7 @@ describe('/wd', () => {
     const { fake, wardogs } = await run(GUID, parseServerDetailResponse(SAMPLE_RESPONSE));
 
     expect(wardogs.calls).toEqual([`id|${GUID}`]);
-    expect(fake.calls[0]).toEqual({ method: 'deferReply', payload: undefined });
+    expect(fake.calls[0]).toEqual({ method: 'deferReply', payload: {} });
     expect(editedEmbeds(fake)[0]?.title).toBe('ASDZ - Alte Säcke Die Zocken | DE | GER');
   });
 
@@ -62,6 +68,26 @@ describe('/wd', () => {
     expect(editedEmbeds(fake)[0]?.image).toBeUndefined();
   });
 
+  it('adds a join button through the bot when it has a public url', async () => {
+    const { fake } = await run(
+      GUID,
+      parseServerDetailResponse(SAMPLE_RESPONSE),
+      null,
+      wdCommand,
+      'https://bot.example.net',
+    );
+
+    const buttons = (edited(fake).components ?? []).flatMap((row) => row.toJSON().components);
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]?.label).toBe('Join');
+    expect(buttons[0]?.url).toBe(`https://bot.example.net/pickup/wardogs/join/${GUID}?lang=en`);
+  });
+
+  it('adds no join button without a public url', async () => {
+    const { fake } = await run(GUID, parseServerDetailResponse(SAMPLE_RESPONSE));
+    expect(edited(fake).components).toEqual([]);
+  });
+
   it.each(['foo', '682028'])('refuses %j privately without asking the api', async (input) => {
     const { fake, wardogs } = await run(input, { kind: 'error' });
 
@@ -80,5 +106,32 @@ describe('/wd', () => {
   ] as const)('explains %j', async (result, text) => {
     const { fake } = await run(GUID, result);
     expect(fake.messages().join(' ')).toContain(text);
+  });
+});
+
+describe('/wd-private', () => {
+  it('defers ephemerally', async () => {
+    const { fake } = await run(
+      GUID,
+      parseServerDetailResponse(SAMPLE_RESPONSE),
+      null,
+      wdPrivateCommand,
+    );
+
+    expect(fake.calls[0]).toEqual({ method: 'deferReply', payload: { flags: 64 } });
+  });
+
+  it('produces the same reply as /wd', async () => {
+    const banner = { name: 'wardogs.jpg', bytes: Buffer.from([0xff, 0xd8, 0xff]) };
+    const open = await run(GUID, parseServerDetailResponse(SAMPLE_RESPONSE), banner);
+    const quiet = await run(
+      GUID,
+      parseServerDetailResponse(SAMPLE_RESPONSE),
+      banner,
+      wdPrivateCommand,
+    );
+
+    expect(editedEmbeds(quiet.fake)).toEqual(editedEmbeds(open.fake));
+    expect(edited(quiet.fake).files?.map((file) => file.name)).toEqual(['wardogs.jpg']);
   });
 });

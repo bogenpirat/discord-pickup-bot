@@ -15,6 +15,7 @@
     "gen:valorant": "npx -y openapi-typescript@7 src/valorant/generated/openapi.json -o src/valorant/generated/schema.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:live": "vitest run --config vitest.live.config.ts",
     "coverage": "vitest run --coverage",
     "lint": "biome check .",
     "format": "biome check --write .",

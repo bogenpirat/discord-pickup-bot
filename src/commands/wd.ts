@@ -2,33 +2,44 @@ import {
   AttachmentBuilder,
   type ChatInputCommandInteraction,
   InteractionContextType,
+  MessageFlags,
   SlashCommandBuilder,
 } from 'discord.js';
 import type { AppContext } from '../app/context.ts';
 import { replyEphemeral } from '../discord/reply.ts';
 import type { SlashCommand } from '../discord/types.ts';
-import { parseServerKey } from '../domain/wardogs/serverKey.ts';
-import { resolveLocale, type Strings, stringsFor } from '../ui/strings.ts';
-import { buildWardogsEmbed } from '../ui/wardogsServer.ts';
+import { parseServerKey, serverKeyGuid } from '../domain/wardogs/serverKey.ts';
+import { wardogsJoinPath } from '../http/routes/wardogsJoin.ts';
+import { type AppLocale, resolveLocale, type Strings, stringsFor } from '../ui/strings.ts';
+import { buildWardogsComponents, buildWardogsEmbed } from '../ui/wardogsServer.ts';
 import type { WardogsLookupResult } from '../wardogs/client.ts';
 
 const SERVER_ID_OPTION = 'server-id';
 
-const definition = new SlashCommandBuilder()
-  .setName('wd')
-  .setDescription('Show the live status of a Wardogs server')
-  .setDescriptionLocalizations({ de: 'Den Live-Status eines Wardogs-Servers zeigen' })
-  .setContexts(InteractionContextType.Guild)
-  .addStringOption((option) =>
-    option
-      .setName(SERVER_ID_OPTION)
-      .setNameLocalizations({ de: 'server-id' })
-      .setDescription('Community server GUID (join code)')
-      .setDescriptionLocalizations({ de: 'GUID (Join-Code) des Community-Servers' })
-      .setMaxLength(64)
-      .setRequired(true),
-  )
-  .toJSON();
+const definitionFor = (name: string, ephemeral: boolean) =>
+  new SlashCommandBuilder()
+    .setName(name)
+    .setDescription(
+      ephemeral
+        ? 'Show the live status of a Wardogs server, visible only to you'
+        : 'Show the live status of a Wardogs server',
+    )
+    .setDescriptionLocalizations({
+      de: ephemeral
+        ? 'Den Live-Status eines Wardogs-Servers zeigen, nur für dich sichtbar'
+        : 'Den Live-Status eines Wardogs-Servers zeigen',
+    })
+    .setContexts(InteractionContextType.Guild)
+    .addStringOption((option) =>
+      option
+        .setName(SERVER_ID_OPTION)
+        .setNameLocalizations({ de: 'server-id' })
+        .setDescription('Community server GUID (join code)')
+        .setDescriptionLocalizations({ de: 'GUID (Join-Code) des Community-Servers' })
+        .setMaxLength(64)
+        .setRequired(true),
+    )
+    .toJSON();
 
 type LookupFailure = Exclude<WardogsLookupResult, { kind: 'live' }>;
 
@@ -46,38 +57,51 @@ const describeFailure = (result: LookupFailure, input: string, strings: Strings)
   }
 };
 
-const execute = async (
-  interaction: ChatInputCommandInteraction,
-  context: AppContext,
-): Promise<void> => {
-  const strings = stringsFor(resolveLocale(interaction.locale));
-  const input = interaction.options.getString(SERVER_ID_OPTION, true).trim();
+const joinUrl = (publicBaseUrl: string | null, key: string, locale: AppLocale): string | null =>
+  publicBaseUrl === null
+    ? null
+    : `${publicBaseUrl}${wardogsJoinPath(serverKeyGuid(key))}?lang=${locale}`;
 
-  const key = parseServerKey(input);
-  if (key === null) {
-    await replyEphemeral(interaction, strings.wdInvalidServerId(input));
-    return;
-  }
+const executeFor =
+  (ephemeral: boolean) =>
+  async (interaction: ChatInputCommandInteraction, context: AppContext): Promise<void> => {
+    const locale = resolveLocale(interaction.locale);
+    const strings = stringsFor(locale);
+    const input = interaction.options.getString(SERVER_ID_OPTION, true).trim();
 
-  // Public on purpose: the point is to show the server to the channel.
-  await interaction.deferReply();
-
-  const result = await context.wardogs.getServerDetail(key);
-  if (result.kind !== 'live') {
-    // Not-found and offline are answers about the server, not trouble with the API.
-    if (result.kind !== 'not-found' && result.kind !== 'offline') {
-      context.logger.warn({ result: result.kind, key }, 'wardogs lookup failed');
+    const key = parseServerKey(input);
+    if (key === null) {
+      await replyEphemeral(interaction, strings.wdInvalidServerId(input));
+      return;
     }
-    await interaction.editReply({ content: describeFailure(result, input, strings) });
-    return;
-  }
 
-  const now = context.now();
-  const banner = await context.wardogs.getBanner(result, now);
-  await interaction.editReply({
-    embeds: [buildWardogsEmbed(result, strings, now, banner?.name ?? null)],
-    files: banner === null ? [] : [new AttachmentBuilder(banner.bytes, { name: banner.name })],
-  });
-};
+    await interaction.deferReply(ephemeral ? { flags: MessageFlags.Ephemeral } : {});
 
-export const wdCommand: SlashCommand = { name: 'wd', definition, execute };
+    const result = await context.wardogs.getServerDetail(key);
+    if (result.kind !== 'live') {
+      // Not-found and offline are answers about the server, not trouble with the API.
+      if (result.kind !== 'not-found' && result.kind !== 'offline') {
+        context.logger.warn({ result: result.kind, key }, 'wardogs lookup failed');
+      }
+      await interaction.editReply({ content: describeFailure(result, input, strings) });
+      return;
+    }
+
+    const now = context.now();
+    const banner = await context.wardogs.getBanner(result, now);
+    await interaction.editReply({
+      embeds: [buildWardogsEmbed(result, strings, now, banner?.name ?? null)],
+      files: banner === null ? [] : [new AttachmentBuilder(banner.bytes, { name: banner.name })],
+      components: buildWardogsComponents(joinUrl(context.publicBaseUrl, key, locale), strings),
+    });
+  };
+
+/** One implementation, two commands — see the note on `createEloCommand`. */
+export const createWdCommand = (name: string, ephemeral: boolean): SlashCommand => ({
+  name,
+  definition: definitionFor(name, ephemeral),
+  execute: executeFor(ephemeral),
+});
+
+export const wdCommand: SlashCommand = createWdCommand('wd', false);
+export const wdPrivateCommand: SlashCommand = createWdCommand('wd-private', true);

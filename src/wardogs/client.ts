@@ -1,3 +1,4 @@
+import { type JoinLinkResult, parseJoinLinkResponse } from '../domain/wardogs/parseJoinLink.ts';
 import {
   type LiveServerDetail,
   parseServerDetailResponse,
@@ -11,6 +12,12 @@ export type WardogsLookupResult =
   | { readonly kind: 'rate-limited' }
   | { readonly kind: 'error' };
 
+export type WardogsJoinResult =
+  | JoinLinkResult
+  | { readonly kind: 'not-found' }
+  | { readonly kind: 'rate-limited' }
+  | { readonly kind: 'error' };
+
 export interface WardogsFetchResponse {
   readonly ok: boolean;
   readonly status: number;
@@ -19,21 +26,31 @@ export interface WardogsFetchResponse {
   arrayBuffer(): Promise<ArrayBuffer>;
 }
 
-export type WardogsFetch = (
-  url: string,
-  init?: { signal: AbortSignal },
-) => Promise<WardogsFetchResponse>;
+export interface WardogsFetchInit {
+  readonly method?: string;
+  readonly headers?: Readonly<Record<string, string>>;
+  readonly body?: string;
+  readonly signal?: AbortSignal;
+}
+
+export type WardogsFetch = (url: string, init?: WardogsFetchInit) => Promise<WardogsFetchResponse>;
 
 export interface WardogsClient {
   /** `key` as `parseServerKey` builds it, e.g. `id|<guid>`. */
   getServerDetail(key: string): Promise<WardogsLookupResult>;
   /** The server's own banner over the site's status card, or whichever of them exists. */
   getBanner(detail: LiveServerDetail, now: Temporal.Instant): Promise<BannerImage | null>;
+  /** The `steam://joinlobby/…` link that drops a player into the server, asked for fresh. */
+  getJoinLink(key: string): Promise<WardogsJoinResult>;
 }
 
 const SERVER_DETAIL_URL = 'https://wardogserverlist.com/api/server-detail';
 const BANNER_URL = 'https://wardogserverlist.com/banner.jpg';
 const SERVER_PAGE_URL = 'https://wardogserverlist.com/server';
+const JOIN_URL = 'https://wardogserverlist.com/discord/api/join';
+/** The join endpoint answers 403 to any request that does not claim to come from the site. */
+const SITE_ORIGIN = 'https://wardogserverlist.com';
+const JOIN_TIMEOUT_MS = 5_000;
 
 /**
  * The site itself caches these responses for two minutes, so asking again
@@ -134,6 +151,31 @@ export const createWardogsClient = (
     }
   };
 
+  // Not cached: the lobby id changes whenever the server restarts, and a stale
+  // one drops the player at an error in-game instead of into the match.
+  const join = async (key: string): Promise<WardogsJoinResult> => {
+    try {
+      const response = await fetchImpl(JOIN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Origin: SITE_ORIGIN },
+        body: JSON.stringify({ key }),
+        signal: AbortSignal.timeout(JOIN_TIMEOUT_MS),
+      });
+      if (response.status === 404) {
+        return { kind: 'not-found' };
+      }
+      if (response.status === 429) {
+        return { kind: 'rate-limited' };
+      }
+      if (!response.ok) {
+        return { kind: 'error' };
+      }
+      return parseJoinLinkResponse(await response.json());
+    } catch {
+      return { kind: 'error' };
+    }
+  };
+
   return {
     getServerDetail: async (key) => {
       const url = serverDetailUrl(key);
@@ -166,5 +208,7 @@ export const createWardogsClient = (
         },
         fetchImage,
       ),
+
+    getJoinLink: join,
   };
 };

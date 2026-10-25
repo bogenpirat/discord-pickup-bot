@@ -15,3 +15,6 @@ export const parseServerKey = (input: string): string | null => {
 
   return GUID.test(guid) ? `${KEY_PREFIX}${guid.toLowerCase()}` : null;
 };
+
+/** The join code inside a key `parseServerKey` built. */
+export const serverKeyGuid = (key: string): string => key.slice(KEY_PREFIX.length);

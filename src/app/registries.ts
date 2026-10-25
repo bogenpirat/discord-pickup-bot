@@ -7,7 +7,7 @@ import { valoCommand } from '../commands/valo.ts';
 import { valoAccountCommand } from '../commands/valoAccount.ts';
 import { valoApiCommand } from '../commands/valoApi.ts';
 import { valoTimeCommand } from '../commands/valoTime.ts';
-import { wdCommand } from '../commands/wd.ts';
+import { wdCommand, wdPrivateCommand } from '../commands/wd.ts';
 import { aliasCommand } from '../discord/aliasCommand.ts';
 import { type ButtonRegistry, createButtonRegistry } from '../discord/buttonRegistry.ts';
 import { type CommandRegistry, createCommandRegistry } from '../discord/commandRegistry.ts';
@@ -28,6 +28,7 @@ export const COMMANDS: readonly SlashCommand[] = [
   lastCommand,
   lastPrivateCommand,
   wdCommand,
+  wdPrivateCommand,
 ];
 
 export const buildCommandRegistry = (): CommandRegistry => createCommandRegistry(COMMANDS);

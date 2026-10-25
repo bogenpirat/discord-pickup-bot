@@ -23,6 +23,8 @@ export interface WardogsClient {
 }
 
 const SERVER_DETAIL_URL = 'https://wardogserverlist.com/api/server-detail';
+const BANNER_URL = 'https://wardogserverlist.com/banner.jpg';
+const SERVER_PAGE_URL = 'https://wardogserverlist.com/server';
 
 /**
  * The site itself caches these responses for two minutes, so asking again
@@ -36,6 +38,19 @@ const isCacheable = (result: WardogsLookupResult): boolean =>
 
 export const serverDetailUrl = (key: string): string =>
   `${SERVER_DETAIL_URL}?${new URLSearchParams({ key })}`;
+
+/**
+ * The site's rendered status card for a server: map art with name, mode and
+ * player count drawn on. `wide` is the 1200×500 cut the site uses for its own
+ * Discord cards. Discord caches images by URL, so `version` has to change for a
+ * later post to show the card as it is now rather than as it was first fetched.
+ */
+export const bannerUrl = (linkKey: string, version: number): string =>
+  `${BANNER_URL}?${new URLSearchParams({ key: linkKey, style: 'wide', v: String(version) })}`;
+
+/** The server's page on the site: join code, live status and player history. */
+export const serverPageUrl = (linkKey: string): string =>
+  `${SERVER_PAGE_URL}?${new URLSearchParams({ key: linkKey })}`;
 
 export const createWardogsClient = (
   fetchImpl: WardogsFetch = fetch,

@@ -36,6 +36,7 @@ export const SAMPLE_LIVE = {
 
 export const SAMPLE_RESPONSE = {
   key: 'id|91052133-1e18-4af8-b54e-499ab279f446',
+  linkKey: 'eu-central|asdz-alte-säcke-die-zocken-de-ger',
   window: '7d',
   updatedAt: '2026-10-24T23:42:18.954Z',
   live: SAMPLE_LIVE,

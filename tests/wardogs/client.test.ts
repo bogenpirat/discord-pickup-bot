@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  bannerUrl,
   createWardogsClient,
+  serverPageUrl,
   type WardogsFetch,
   type WardogsFetchResponse,
 } from '../../src/wardogs/client.ts';
@@ -23,6 +25,22 @@ const recordingFetch = (impl: (url: string) => Promise<WardogsFetchResponse>) =>
   };
   return { urls, fetchImpl };
 };
+
+describe('bannerUrl', () => {
+  it('asks for the wide card with the key encoded and a version', () => {
+    expect(bannerUrl('eu-central|asdz-alte-säcke', 1792885338)).toBe(
+      'https://wardogserverlist.com/banner.jpg?key=eu-central%7Casdz-alte-s%C3%A4cke&style=wide&v=1792885338',
+    );
+  });
+});
+
+describe('serverPageUrl', () => {
+  it('links the server page by its encoded key', () => {
+    expect(serverPageUrl('eu-central|asdz-alte-säcke')).toBe(
+      'https://wardogserverlist.com/server?key=eu-central%7Casdz-alte-s%C3%A4cke',
+    );
+  });
+});
 
 describe('createWardogsClient', () => {
   it('asks by key with the pipe encoded and no window', async () => {

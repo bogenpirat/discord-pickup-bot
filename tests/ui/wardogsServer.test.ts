@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { WardogsServer } from '../../src/domain/wardogs/parseServerDetail.ts';
+import type {
+  LiveServerDetail,
+  WardogsServer,
+} from '../../src/domain/wardogs/parseServerDetail.ts';
 import { stringsFor } from '../../src/ui/strings.ts';
 import { buildWardogsEmbed, humanizeSky } from '../../src/ui/wardogsServer.ts';
 
@@ -13,18 +16,25 @@ const SERVER: WardogsServer = {
   world: 'Europe',
   sky: 'DayClear',
   matchStart: MATCH_START,
-  region: 'eu-central',
-  gameMode: 'KOTH',
   passworded: false,
   imageUrl: 'https://files.catbox.moe/32cmfy.png',
 };
 
 const UPDATED_AT = Temporal.Instant.from('2026-10-24T23:42:18.954Z');
 const NOW = Temporal.Instant.fromEpochMilliseconds(MATCH_START + 82 * 60_000);
+const LINK_KEY = 'eu-central|asdz-alte-säcke-die-zocken-de-ger';
 const en = stringsFor('en');
 
+const detail = (overrides: Partial<LiveServerDetail> = {}): LiveServerDetail => ({
+  kind: 'live',
+  server: SERVER,
+  updatedAt: UPDATED_AT,
+  linkKey: LINK_KEY,
+  ...overrides,
+});
+
 const fieldsOf = (server: WardogsServer, now = NOW) =>
-  buildWardogsEmbed(server, UPDATED_AT, en, now).toJSON();
+  buildWardogsEmbed(detail({ server }), en, now).toJSON();
 
 describe('humanizeSky', () => {
   it('splits the camel case', () => {
@@ -38,7 +48,7 @@ describe('buildWardogsEmbed', () => {
     const embed = fieldsOf(SERVER);
 
     expect(embed.title).toBe(SERVER.name);
-    expect(embed.description).toBe('eu-central · KOTH');
+    expect(embed.description).toBeUndefined();
     expect(embed.thumbnail?.url).toBe(SERVER.imageUrl);
     expect(embed.timestamp).toBe('2026-10-24T23:42:18.954Z');
     expect(embed.fields).toEqual([
@@ -63,21 +73,34 @@ describe('buildWardogsEmbed', () => {
     expect(embed.fields).toHaveLength(3);
   });
 
-  it('marks a passworded server and skips missing details', () => {
-    const embed = fieldsOf({ ...SERVER, region: null, gameMode: null, passworded: true });
+  it('marks a passworded server', () => {
+    const embed = fieldsOf({ ...SERVER, passworded: true });
     expect(embed.description).toBe('🔒 Password');
-  });
-
-  it('has no description when there are no details', () => {
-    const embed = fieldsOf({ ...SERVER, region: null, gameMode: null });
-    expect(embed.description).toBeUndefined();
   });
 
   it.each([null, 'http://example.com/a.png', 'not a url'])('skips the thumbnail %j', (imageUrl) => {
     expect(fieldsOf({ ...SERVER, imageUrl }).thumbnail).toBeUndefined();
   });
 
-  it('has no timestamp without updatedAt', () => {
-    expect(buildWardogsEmbed(SERVER, null, en, NOW).toJSON().timestamp).toBeUndefined();
+  it('links the title to the server page and shows its banner, versioned by the poll', () => {
+    const embed = fieldsOf(SERVER);
+    expect(embed.url).toBe(
+      'https://wardogserverlist.com/server?key=eu-central%7Casdz-alte-s%C3%A4cke-die-zocken-de-ger',
+    );
+    expect(embed.image?.url).toBe(
+      'https://wardogserverlist.com/banner.jpg?key=eu-central%7Casdz-alte-s%C3%A4cke-die-zocken-de-ger&style=wide&v=1792885338',
+    );
+  });
+
+  it('has no timestamp without updatedAt, and versions the banner by now instead', () => {
+    const embed = buildWardogsEmbed(detail({ updatedAt: null }), en, NOW).toJSON();
+    expect(embed.timestamp).toBeUndefined();
+    expect(embed.image?.url).toContain(`&v=${Math.floor(NOW.epochMilliseconds / 1000)}`);
+  });
+
+  it('has no banner or link without a link key', () => {
+    const embed = buildWardogsEmbed(detail({ linkKey: null }), en, NOW).toJSON();
+    expect(embed.image).toBeUndefined();
+    expect(embed.url).toBeUndefined();
   });
 });

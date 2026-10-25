@@ -1,5 +1,6 @@
 import { EmbedBuilder, TimestampStyles, time } from 'discord.js';
-import { roundElapsedMs, type WardogsServer } from '../domain/wardogs/parseServerDetail.ts';
+import { type LiveServerDetail, roundElapsedMs } from '../domain/wardogs/parseServerDetail.ts';
+import { bannerUrl, serverPageUrl } from '../wardogs/client.ts';
 import { formatDuration } from './matchSummary.ts';
 import type { Strings } from './strings.ts';
 
@@ -17,11 +18,11 @@ const isHttpsUrl = (value: string): boolean => {
 };
 
 export const buildWardogsEmbed = (
-  server: WardogsServer,
-  updatedAt: Temporal.Instant | null,
+  detail: LiveServerDetail,
   strings: Strings,
   now: Temporal.Instant,
 ): EmbedBuilder => {
+  const { server, updatedAt, linkKey } = detail;
   const embed = new EmbedBuilder()
     .setColor(WARDOGS_OLIVE)
     .setTitle(server.name)
@@ -36,13 +37,8 @@ export const buildWardogsEmbed = (
     )
     .setFooter({ text: strings.wdFooter });
 
-  const details = [
-    server.region,
-    server.gameMode,
-    server.passworded ? strings.wdPassworded : null,
-  ].filter((part): part is string => part !== null);
-  if (details.length > 0) {
-    embed.setDescription(details.join(' · '));
+  if (server.passworded) {
+    embed.setDescription(strings.wdPassworded);
   }
 
   // Measured against now rather than `updatedAt`: the start is an absolute
@@ -64,6 +60,12 @@ export const buildWardogsEmbed = (
   }
   if (updatedAt !== null) {
     embed.setTimestamp(new Date(updatedAt.epochMilliseconds));
+  }
+  if (linkKey !== null) {
+    embed.setURL(serverPageUrl(linkKey));
+    // Versioned by the poll the data came from, which is when the card changes.
+    const version = Math.floor((updatedAt ?? now).epochMilliseconds / 1000);
+    embed.setImage(bannerUrl(linkKey, version));
   }
 
   return embed;

@@ -72,7 +72,7 @@ const execute = async (
   }
 
   await interaction.editReply({
-    embeds: [buildWardogsEmbed(result.server, result.updatedAt, strings, context.now())],
+    embeds: [buildWardogsEmbed(result, strings, context.now())],
   });
 };
 

@@ -92,7 +92,10 @@ export const wardogsJoinRoute = (deps: WardogsJoinDeps): HttpRoute => ({
     const live = detail.kind === 'live' ? detail : null;
 
     if (result.kind === 'invalid' || result.kind === 'error') {
-      deps.logger.warn({ result: result.kind, key }, 'wardogs join link lookup failed');
+      deps.logger.warn(
+        { result: result.kind, status: result.kind === 'error' ? result.status : undefined, key },
+        'wardogs join link lookup failed',
+      );
     }
 
     const linkKey = live?.linkKey ?? null;

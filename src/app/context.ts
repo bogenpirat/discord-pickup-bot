@@ -47,7 +47,7 @@ export interface AppContext {
    * for the whole run when there is no client to load it with.
    */
   readonly content: ContentCatalog;
-  /** The wardogserverlist.com client. Its API is public, so it is always present. */
+  /** The wardogserverlist.com client. Present without an API key too; the site then refuses lookups. */
   readonly wardogs: WardogsClient;
   now(): Temporal.Instant;
 }

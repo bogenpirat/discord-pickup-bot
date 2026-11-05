@@ -351,6 +351,7 @@ HTTP_PORT=18080                           # only used when PUBLIC_BASE_URL is se
 VALORANT_API_KEY=                         # optional; blank = no /valo-account, no /valo-api
 VALORANT_RATE_LIMIT_PER_MINUTE=30         # requests per minute your key allows
 VALORANT_PLAYGROUND_SECRET=               # optional; blank = no API playground
+WARDOGS_API_KEY=                          # needed for /wd
 ```
 
 `PUBLIC_BASE_URL` is the address the **iCal** button points at, so it has to be reachable
@@ -381,6 +382,11 @@ backs off, holding every queued request until the API's own reset time has passe
 `VALORANT_PLAYGROUND_SECRET` additionally serves an API playground from the bot's own web
 server, so it needs `PUBLIC_BASE_URL` set as well — see
 [The API playground](#the-api-playground) for what it exposes and what guards it.
+
+`WARDOGS_API_KEY` is a key from your [wardogserverlist.com account page](https://wardogserverlist.com/account#api-keys),
+sent in an `X-API-Key` header on server lookups. The site refuses lookups without one from
+7 Nov 2026, so `/wd` and the join page's server details need it. Join links and banners work
+without a key.
 
 ### 10. Start and register
 

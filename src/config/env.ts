@@ -41,6 +41,10 @@ const schema = z.object({
     .min(24)
     .regex(/^[A-Za-z0-9_-]+$/, 'must be url-safe: letters, digits, dot-free, - or _')
     .optional(),
+  // Key for the wardogserverlist.com API, made on the site's account page. The
+  // site refuses server lookups without one from 7 Nov 2026, so blank or absent
+  // leaves /wd answering that the site is not responding.
+  WARDOGS_API_KEY: z.string().min(1).optional(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   // Where to append the audit log, one JSON line per slash command or button
   // click. Blank or absent records nothing. Under Docker this points into a

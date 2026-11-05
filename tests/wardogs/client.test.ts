@@ -69,10 +69,39 @@ describe('createWardogsClient', () => {
   it.each([
     [404, 'not-found'],
     [429, 'rate-limited'],
-    [500, 'error'],
   ])('maps status %i to %s', async (status, kind) => {
     const { fetchImpl } = recordingFetch(async () => respond(status));
     expect(await createWardogsClient(fetchImpl).getServerDetail(KEY)).toEqual({ kind });
+  });
+
+  it.each([401, 500])('reports status %i as an error carrying the status', async (status) => {
+    const { fetchImpl } = recordingFetch(async () => respond(status));
+    expect(await createWardogsClient(fetchImpl).getServerDetail(KEY)).toEqual({
+      kind: 'error',
+      status,
+    });
+  });
+
+  it('sends the api key in an X-API-Key header', async () => {
+    const inits: (WardogsFetchInit | undefined)[] = [];
+    const fetchImpl: WardogsFetch = async (_url, init) => {
+      inits.push(init);
+      return respond(200, SAMPLE_RESPONSE);
+    };
+    await createWardogsClient(fetchImpl, Date.now, 'secret-key').getServerDetail(KEY);
+
+    expect(inits).toEqual([{ headers: { 'X-API-Key': 'secret-key' } }]);
+  });
+
+  it('sends no headers without an api key', async () => {
+    const inits: (WardogsFetchInit | undefined)[] = [];
+    const fetchImpl: WardogsFetch = async (_url, init) => {
+      inits.push(init);
+      return respond(200, SAMPLE_RESPONSE);
+    };
+    await createWardogsClient(fetchImpl).getServerDetail(KEY);
+
+    expect(inits).toEqual([undefined]);
   });
 
   it('reports a failed request as an error', async () => {
@@ -160,11 +189,17 @@ describe('getJoinLink', () => {
   it.each([
     [404, 'not-found'],
     [429, 'rate-limited'],
-    [403, 'error'],
-    [500, 'error'],
   ])('maps status %i to %s', async (status, kind) => {
     const { fetchImpl } = recordingFetch(async () => respond(status));
     expect(await createWardogsClient(fetchImpl).getJoinLink(KEY)).toEqual({ kind });
+  });
+
+  it.each([403, 500])('reports status %i as an error carrying the status', async (status) => {
+    const { fetchImpl } = recordingFetch(async () => respond(status));
+    expect(await createWardogsClient(fetchImpl).getJoinLink(KEY)).toEqual({
+      kind: 'error',
+      status,
+    });
   });
 
   it('reports a failed request as an error', async () => {

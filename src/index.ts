@@ -18,6 +18,7 @@ import { createLogger } from './logger.ts';
 import { createSteamClient } from './steam/client.ts';
 import { startSteamWatchPoller } from './steam/poller.ts';
 import { createValorantClient, type ValorantClient } from './valorant/client.ts';
+import { createWardogsClient } from './wardogs/client.ts';
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
 
@@ -60,6 +61,8 @@ logger.info(
   'valorant api client',
 );
 
+logger.info({ apiKey: env.WARDOGS_API_KEY !== undefined }, 'wardogs api client');
+
 const context = createAppContext(
   db,
   logger,
@@ -67,6 +70,7 @@ const context = createAppContext(
   env.PUBLIC_BASE_URL ?? null,
   valorant,
   audit,
+  createWardogsClient(fetch, Date.now, env.WARDOGS_API_KEY ?? null),
 );
 const commands = buildCommandRegistry();
 const buttons = buildButtonRegistry();

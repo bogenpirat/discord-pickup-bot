@@ -6,17 +6,20 @@ import {
 } from '../domain/wardogs/parseServerDetail.ts';
 import { assembleBanner, type BannerImage, type ImageFetch } from './banner.ts';
 
+/** `status` is the HTTP status the site answered with, absent when no answer came. */
+export type WardogsError = { readonly kind: 'error'; readonly status?: number };
+
 export type WardogsLookupResult =
   | ServerDetailResult
   | { readonly kind: 'not-found' }
   | { readonly kind: 'rate-limited' }
-  | { readonly kind: 'error' };
+  | WardogsError;
 
 export type WardogsJoinResult =
   | JoinLinkResult
   | { readonly kind: 'not-found' }
   | { readonly kind: 'rate-limited' }
-  | { readonly kind: 'error' };
+  | WardogsError;
 
 export interface WardogsFetchResponse {
   readonly ok: boolean;
@@ -114,9 +117,14 @@ export const createImageFetch =
     }
   };
 
+/**
+ * `apiKey` goes out in an `X-API-Key` header on the data API only: banners and
+ * join links need none, so they are not handed one.
+ */
 export const createWardogsClient = (
   fetchImpl: WardogsFetch = fetch,
   now: () => number = Date.now,
+  apiKey: string | null = null,
 ): WardogsClient => {
   const cache = new Map<
     string,
@@ -135,7 +143,10 @@ export const createWardogsClient = (
 
   const lookup = async (url: string): Promise<WardogsLookupResult> => {
     try {
-      const response = await fetchImpl(url);
+      const response = await fetchImpl(
+        url,
+        apiKey === null ? undefined : { headers: { 'X-API-Key': apiKey } },
+      );
       if (response.status === 404) {
         return { kind: 'not-found' };
       }
@@ -143,7 +154,7 @@ export const createWardogsClient = (
         return { kind: 'rate-limited' };
       }
       if (!response.ok) {
-        return { kind: 'error' };
+        return { kind: 'error', status: response.status };
       }
       return parseServerDetailResponse(await response.json());
     } catch {
@@ -168,7 +179,7 @@ export const createWardogsClient = (
         return { kind: 'rate-limited' };
       }
       if (!response.ok) {
-        return { kind: 'error' };
+        return { kind: 'error', status: response.status };
       }
       return parseJoinLinkResponse(await response.json());
     } catch {

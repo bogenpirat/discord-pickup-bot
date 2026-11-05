@@ -81,7 +81,10 @@ const executeFor =
     if (result.kind !== 'live') {
       // Not-found and offline are answers about the server, not trouble with the API.
       if (result.kind !== 'not-found' && result.kind !== 'offline') {
-        context.logger.warn({ result: result.kind, key }, 'wardogs lookup failed');
+        context.logger.warn(
+          { result: result.kind, status: result.kind === 'error' ? result.status : undefined, key },
+          'wardogs lookup failed',
+        );
       }
       await interaction.editReply({ content: describeFailure(result, input, strings) });
       return;

@@ -2,8 +2,8 @@ import { defineConfig } from 'vitest/config';
 
 /**
  * Tests against the real third-party services the bot talks to. They need the
- * network and can fail for reasons outside this repository, so `npm test` and CI
- * leave them out; run them with `npm run test:live`.
+ * network and can fail for reasons outside this repository, so `npm test` leaves
+ * them out; run them with `npm run test:live`. CI runs them as a separate step.
  */
 export default defineConfig({
   test: {

@@ -42,6 +42,10 @@ jobs:
 
       - name: Live tests against third-party services
         run: npm run test:live
+        env:
+          # Finding a live Wardogs server needs a key; without the secret those
+          # two tests are skipped rather than failed.
+          WARDOGS_API_KEY: ${{ secrets.WARDOGS_API_KEY }}
 
       - name: Compile
         run: npm run build

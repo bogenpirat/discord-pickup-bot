@@ -13,12 +13,20 @@ import { silentLogger } from '../helpers/fakes.ts';
  * A failure here means the site changed that contract, not that the bot broke.
  *
  * Every test sends at most one join request; the site rate-limits joins per IP.
+ *
+ * Finding a live server goes through the site's data API, which has refused
+ * requests without an API key since 7 Nov 2026. The two tests that need one read
+ * it from `WARDOGS_API_KEY` and are skipped without it, since a missing key says
+ * nothing about the join contract. The join endpoint itself needs no key.
  */
 
 const JOIN_URL = 'https://wardogserverlist.com/discord/api/join';
 const SERVERS_URL = 'https://wardogserverlist.com/api/servers-lite';
 const UNKNOWN_KEY = 'id|00000000-0000-0000-0000-000000000000';
 const STEAM_LOBBY_LINK = /^steam:\/\/joinlobby\/\d+\/\d+$/;
+
+const API_KEY = process.env['WARDOGS_API_KEY'] || undefined;
+const withApiKey = it.skipIf(API_KEY === undefined);
 
 const serversSchema = z.object({
   servers: z.array(
@@ -36,7 +44,7 @@ const serversSchema = z.object({
  * likely to go offline between the list and the join.
  */
 const findLiveServerKey = async (): Promise<string> => {
-  const response = await fetch(SERVERS_URL);
+  const response = await fetch(SERVERS_URL, { headers: { 'X-API-Key': API_KEY ?? '' } });
   expect(response.status, `${SERVERS_URL} status`).toBe(200);
 
   const { servers } = serversSchema.parse(await response.json());
@@ -58,7 +66,7 @@ const postJoin = (key: string, headers: Readonly<Record<string, string>>) =>
   });
 
 describe('wardogserverlist.com join api', () => {
-  it('hands the client a steam lobby link for a live server', async () => {
+  withApiKey('hands the client a steam lobby link for a live server', async () => {
     const key = await findLiveServerKey();
     const result = await createWardogsClient().getJoinLink(key);
 
@@ -68,7 +76,7 @@ describe('wardogserverlist.com join api', () => {
     });
   });
 
-  it('serves the join page that redirects to steam', async () => {
+  withApiKey('serves the join page that redirects to steam', async () => {
     const key = await findLiveServerKey();
     const guid = key.slice('id|'.length);
     const response = await resolveRequest(

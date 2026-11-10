@@ -19,6 +19,7 @@ import {
   type PickupChoice,
 } from '../domain/pickupChoice.ts';
 import { groupByChoice, type ResponseSet, tally } from '../domain/pickupState.ts';
+import { CINEMA_CHOICE_EMOJIS } from '../domain/pickupTheme.ts';
 import { pickupCalendarEvent } from './calendarEvent.ts';
 import { type AppLocale, DEFAULT_LOCALE, type Strings, stringsFor } from './strings.ts';
 
@@ -31,6 +32,15 @@ const ELLIPSIS = '…';
 
 const CALENDAR_EMOJI = '📅';
 const ICAL_EMOJI = '📆';
+
+const GAME_COLOR = 0x5865f2;
+/** Velvet curtain red. */
+const CINEMA_COLOR = 0xb3121d;
+const CLOSED_COLOR = 0x71767b;
+
+const PRESENTER_EMOJI = '🎥';
+const SHOWTIME_EMOJI = '🕗';
+const REEL_EMOJI = '🎞️';
 
 const BUTTON_STYLES: Readonly<Record<PickupChoice, ButtonStyle>> = {
   in: ButtonStyle.Success,
@@ -79,41 +89,107 @@ export const renderNames = (responses: ResponseSet, strings: Strings): string =>
   return strings.moreNames(responses.length);
 };
 
-const buildEmbed = (view: PickupView, strings: Strings): EmbedBuilder => {
+/** How the start reads, or null when there is nothing to say about it. */
+const renderStart = (pickup: PickupRecord): string | null => {
+  if (pickup.startsAt !== null) {
+    const startsAt = new Date(pickup.startsAt);
+    return `${time(startsAt, TimestampStyles.ShortTime)} (${time(startsAt, TimestampStyles.RelativeTime)})`;
+  }
+  return pickup.startsAtText;
+};
+
+/**
+ * The labels and icons on the three response buttons and their fields. A movie
+ * night brings its own and ignores the per-server emoji settings, which were
+ * chosen for the game call.
+ */
+interface ChoiceDisplay {
+  readonly labels: Readonly<Record<PickupChoice, string>>;
+  readonly emojis: ChoiceEmojis;
+  readonly closeButton: string;
+}
+
+const choiceDisplay = (view: PickupView, strings: Strings): ChoiceDisplay =>
+  view.pickup.theme === 'cinema'
+    ? {
+        labels: strings.cinema.choice,
+        emojis: CINEMA_CHOICE_EMOJIS,
+        closeButton: strings.cinema.closeButton,
+      }
+    : {
+        labels: strings.choice,
+        emojis: view.emojis ?? NO_CHOICE_EMOJIS,
+        closeButton: strings.closeButton,
+      };
+
+const addChoiceFields = (
+  embed: EmbedBuilder,
+  view: PickupView,
+  strings: Strings,
+  display: ChoiceDisplay,
+): void => {
   const groups = groupByChoice(view.responses);
+
+  for (const choice of PICKUP_CHOICES) {
+    const group = groups[choice];
+    embed.addFields({
+      name: `${emojiFor(choice, display.emojis)} ${display.labels[choice]} (${group.length})`,
+      value: renderNames(group, strings),
+      inline: true,
+    });
+  }
+};
+
+const buildGameEmbed = (view: PickupView, strings: Strings): EmbedBuilder => {
   const embed = new EmbedBuilder()
     .setTitle(view.pickup.note === null ? strings.title : `${strings.title} — ${view.pickup.note}`)
-    .setColor(view.pickup.status === 'closed' ? 0x71767b : 0x5865f2)
+    .setColor(view.pickup.status === 'closed' ? CLOSED_COLOR : GAME_COLOR)
     .setFooter({
       text: view.pickup.status === 'closed' ? strings.closedFooter : strings.openFooter,
     });
 
   const lines = [`${strings.organizer}: ${userMention(view.pickup.creatorId)}`];
-
-  if (view.pickup.startsAt !== null) {
-    const startsAt = new Date(view.pickup.startsAt);
-    lines.push(
-      `${strings.startsAt}: ${time(startsAt, TimestampStyles.ShortTime)} (${time(startsAt, TimestampStyles.RelativeTime)})`,
-    );
-  } else if (view.pickup.startsAtText !== null) {
-    lines.push(`${strings.startsAt}: ${view.pickup.startsAtText}`);
+  const start = renderStart(view.pickup);
+  if (start !== null) {
+    lines.push(`${strings.startsAt}: ${start}`);
   }
 
   embed.setDescription(lines.join('\n'));
-
-  const emojis = view.emojis ?? NO_CHOICE_EMOJIS;
-
-  for (const choice of PICKUP_CHOICES) {
-    const group = groups[choice];
-    embed.addFields({
-      name: `${emojiFor(choice, emojis)} ${strings.choice[choice]} (${group.length})`,
-      value: renderNames(group, strings),
-      inline: true,
-    });
-  }
+  addChoiceFields(embed, view, strings, choiceDisplay(view, strings));
 
   return embed;
 };
+
+/**
+ * A movie night is laid out like a poster: the marquee over the feature, who
+ * presents it and when it shows, and the pickup's id doubling as the
+ * screening number at the bottom of the ticket.
+ */
+const buildCinemaEmbed = (view: PickupView, strings: Strings): EmbedBuilder => {
+  const cinema = strings.cinema;
+  const closed = view.pickup.status === 'closed';
+  const embed = new EmbedBuilder()
+    .setAuthor({ name: cinema.marquee })
+    .setTitle(`${REEL_EMOJI} ${view.pickup.note ?? cinema.untitled}`)
+    .setColor(closed ? CLOSED_COLOR : CINEMA_COLOR)
+    .setFooter({
+      text: closed ? cinema.closedFooter(view.pickup.id) : cinema.openFooter(view.pickup.id),
+    });
+
+  const lines = [`${PRESENTER_EMOJI} ${cinema.presentedBy} ${userMention(view.pickup.creatorId)}`];
+  const start = renderStart(view.pickup);
+  if (start !== null) {
+    lines.push(`${SHOWTIME_EMOJI} ${cinema.showtime}: ${start}`);
+  }
+
+  embed.setDescription(lines.join('\n'));
+  addChoiceFields(embed, view, strings, choiceDisplay(view, strings));
+
+  return embed;
+};
+
+const buildEmbed = (view: PickupView, strings: Strings): EmbedBuilder =>
+  view.pickup.theme === 'cinema' ? buildCinemaEmbed(view, strings) : buildGameEmbed(view, strings);
 
 /** Lengths to try, longest first, down to nothing. */
 const lengthsDownFrom = (total: number): number[] => {
@@ -217,20 +293,20 @@ const buildComponents = (
 ): ActionRowBuilder<ButtonBuilder>[] => {
   const counts = tally(view.responses);
   const disabled = view.pickup.status === 'closed';
-  const emojis = view.emojis ?? NO_CHOICE_EMOJIS;
+  const display = choiceDisplay(view, strings);
 
   const actions = new ActionRowBuilder<ButtonBuilder>().addComponents(
     ...PICKUP_CHOICES.map((choice) =>
       new ButtonBuilder()
         .setCustomId(encodeRespond(choice, view.pickup.id))
-        .setLabel(`${strings.choice[choice]} · ${counts[choice]}`)
+        .setLabel(`${display.labels[choice]} · ${counts[choice]}`)
         .setStyle(BUTTON_STYLES[choice])
-        .setEmoji(emojiFor(choice, emojis))
+        .setEmoji(emojiFor(choice, display.emojis))
         .setDisabled(disabled),
     ),
     new ButtonBuilder()
       .setCustomId(encodeClose(view.pickup.id))
-      .setLabel(strings.closeButton)
+      .setLabel(display.closeButton)
       .setStyle(ButtonStyle.Danger)
       .setDisabled(disabled),
   );
@@ -270,13 +346,31 @@ const buildComponents = (
   return [actions, calendar];
 };
 
+/**
+ * The line above the embed carries the ping. A movie night adds its curtain
+ * call while the box office is open; a closed pickup says nothing up there.
+ */
+const renderContent = (
+  view: PickupView,
+  strings: Strings,
+  mentionRoleId: string | null,
+): string => {
+  const mention = mentionRoleId === null ? null : roleMention(mentionRoleId);
+
+  if (view.pickup.theme !== 'cinema' || view.pickup.status === 'closed') {
+    return mention ?? '';
+  }
+
+  return mention === null ? strings.cinema.curtainUp : `${strings.cinema.curtainUp} ${mention}`;
+};
+
 export const renderPickupMessage = (view: PickupView): PickupMessagePayload => {
   const locale = view.locale ?? DEFAULT_LOCALE;
   const strings = stringsFor(locale);
   const mentionRoleId = view.pickup.status === 'closed' ? null : view.mentionRoleId;
 
   return {
-    content: mentionRoleId === null ? '' : roleMention(mentionRoleId),
+    content: renderContent(view, strings, mentionRoleId),
     embeds: [buildEmbed(view, strings)],
     components: buildComponents(view, strings, locale),
     allowedMentions: { parse: [], roles: mentionRoleId === null ? [] : [mentionRoleId] },

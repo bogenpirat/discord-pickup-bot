@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { pickupCommand } from '../../src/commands/pickup.ts';
 import { pickupConfigCommand } from '../../src/commands/pickupConfig.ts';
 import { valoCommand } from '../../src/commands/valo.ts';
-import { valoTimeCommand } from '../../src/commands/valoTime.ts';
+import { pickupTimeCommand, valoTimeCommand } from '../../src/commands/valoTime.ts';
 import { createFakeCommandInteraction, createTestContext } from '../helpers/fakes.ts';
 
 const ADMIN_ROLE = 'role-admin';
@@ -1000,6 +1001,7 @@ describe('/valo-time', () => {
     const older = context.pickups.create({
       guildId: 'guild-1',
       channelId: 'channel-1',
+      theme: 'game',
       creatorId: 'user-1',
       startsAt: null,
       startsAtText: null,
@@ -1026,5 +1028,230 @@ describe('/valo-time', () => {
 
     expect(stored(context)?.startsAt).toBeNull();
     expect(fake.messages().join(' ')).toContain('noch kein Pickup');
+  });
+});
+
+describe('/pickup movie night', () => {
+  /** Both themes configured, so each test can tell which one was used. */
+  const configured = () => {
+    const context = createTestContext();
+    context.settings.setPickupChannel('guild-1', 'channel-1');
+    context.settings.setMentionRole('guild-1', 'role-valo');
+    context.settings.setCinemaChannel('guild-1', 'channel-cinema');
+    context.settings.setCinemaRole('guild-1', 'role-cinema');
+    return context;
+  };
+
+  const contentOf = (payload: unknown) => (payload as { content: string }).content;
+
+  it('is registered as /pickup', () => {
+    expect(pickupCommand.name).toBe('pickup');
+  });
+
+  it('posts a movie night that pings the cinema role, not the game role', async () => {
+    const context = configured();
+    const fake = createFakeCommandInteraction({ strings: { info: 'Dune' } });
+
+    await pickupCommand.execute(fake.interaction, context);
+
+    expect(context.pickups.findByMessageId('message-1')?.theme).toBe('cinema');
+    expect(contentOf(fake.sent[0])).toBe('🍿 Vorhang auf! <@&role-cinema>');
+    expect(fake.messages().join(' ')).toContain('Filmabend angekündigt');
+  });
+
+  it('pings nobody when only the game role is configured', async () => {
+    const context = createTestContext();
+    context.settings.setMentionRole('guild-1', 'role-valo');
+    const fake = createFakeCommandInteraction();
+
+    await pickupCommand.execute(fake.interaction, context);
+
+    expect(contentOf(fake.sent[0])).toBe('🍿 Vorhang auf!');
+  });
+
+  it('falls back to the cinema channel, not the game one', async () => {
+    const context = configured();
+    const fake = createFakeCommandInteraction({
+      channelId: 'channel-7',
+      unsendableChannelIds: ['channel-7'],
+    });
+
+    await pickupCommand.execute(fake.interaction, context);
+
+    expect(context.pickups.findByMessageId('message-1')?.channelId).toBe('channel-cinema');
+    expect(fake.messages().join(' ')).toContain('läuft in <#channel-cinema>');
+  });
+
+  it('asks for the cinema fallback even when the game one is set', async () => {
+    const context = createTestContext();
+    context.settings.setPickupChannel('guild-1', 'channel-1');
+    const fake = createFakeCommandInteraction({
+      channelId: 'channel-7',
+      unsendableChannelIds: ['channel-7'],
+    });
+
+    await pickupCommand.execute(fake.interaction, context);
+
+    expect(fake.messages().join(' ')).toContain('/pickup-config kino-kanal');
+  });
+
+  it('points at /pickup-time when no time was found', async () => {
+    const context = configured();
+    const fake = createFakeCommandInteraction({ strings: { info: 'Dune' } });
+
+    await pickupCommand.execute(fake.interaction, context);
+
+    expect(fake.messages().join(' ')).toContain('/pickup-time');
+  });
+
+  it('keeps the cinema role when /valo is called right after', async () => {
+    const context = configured();
+    await pickupCommand.execute(createFakeCommandInteraction().interaction, context);
+    const valo = createFakeCommandInteraction({ messageId: 'message-2' });
+
+    await valoCommand.execute(valo.interaction, context);
+
+    expect(contentOf(valo.sent[0])).toBe('<@&role-valo>');
+    expect(context.pickups.findByMessageId('message-2')?.theme).toBe('game');
+  });
+});
+
+describe('/pickup-time', () => {
+  const at = (iso: string) => Temporal.Instant.from(iso).epochMilliseconds;
+
+  /** A game call first, then a movie night, both in the same channel. */
+  const bothPosted = async () => {
+    const context = createTestContext();
+    context.settings.setMentionRole('guild-1', 'role-valo');
+    context.settings.setCinemaRole('guild-1', 'role-cinema');
+    await valoCommand.execute(
+      createFakeCommandInteraction({ messageId: 'message-game' }).interaction,
+      context,
+    );
+    await pickupCommand.execute(
+      createFakeCommandInteraction({ messageId: 'message-cinema' }).interaction,
+      context,
+    );
+    return context;
+  };
+
+  it('is registered as /pickup-time', () => {
+    expect(pickupTimeCommand.name).toBe('pickup-time');
+  });
+
+  it('moves the movie night and leaves the game call alone', async () => {
+    const context = await bothPosted();
+    const fake = createFakeCommandInteraction({
+      messageId: 'message-cinema',
+      strings: { time: '20:30' },
+    });
+
+    await pickupTimeCommand.execute(fake.interaction, context);
+
+    expect(context.pickups.findByMessageId('message-cinema')?.startsAt).toBe(
+      at('2026-07-27T18:30:00Z'),
+    );
+    expect(context.pickups.findByMessageId('message-game')?.startsAt).toBeNull();
+    expect(fake.messages().join(' ')).toContain('Vorstellung verlegt');
+  });
+
+  it('re-renders the poster with the cinema role', async () => {
+    const context = await bothPosted();
+    const fake = createFakeCommandInteraction({
+      messageId: 'message-cinema',
+      strings: { time: '20:30' },
+    });
+
+    await pickupTimeCommand.execute(fake.interaction, context);
+
+    expect((fake.edited.at(-1) as { content: string }).content).toBe(
+      '🍿 Vorhang auf! <@&role-cinema>',
+    );
+  });
+
+  it('lets /valo-time move only the game call', async () => {
+    const context = await bothPosted();
+    const fake = createFakeCommandInteraction({
+      messageId: 'message-game',
+      strings: { time: '20:30' },
+    });
+
+    await valoTimeCommand.execute(fake.interaction, context);
+
+    expect(context.pickups.findByMessageId('message-game')?.startsAt).toBe(
+      at('2026-07-27T18:30:00Z'),
+    );
+    expect(context.pickups.findByMessageId('message-cinema')?.startsAt).toBeNull();
+  });
+
+  it('says so when no movie night is showing here', async () => {
+    const context = createTestContext();
+    await valoCommand.execute(createFakeCommandInteraction().interaction, context);
+    const fake = createFakeCommandInteraction({ strings: { time: '20:30' } });
+
+    await pickupTimeCommand.execute(fake.interaction, context);
+
+    expect(fake.messages().join(' ')).toContain('noch kein Filmabend');
+  });
+});
+
+describe('/pickup-config cinema settings', () => {
+  it('sets the cinema fallback channel', async () => {
+    const context = createTestContext();
+    const fake = createFakeCommandInteraction({
+      subcommand: 'cinema-channel',
+      manageGuild: true,
+      channels: { channel: { id: 'channel-cinema' } },
+    });
+
+    await pickupConfigCommand.execute(fake.interaction, context);
+
+    expect(context.settings.get('guild-1').cinemaChannelId).toBe('channel-cinema');
+    expect(context.settings.get('guild-1').pickupChannelId).toBeNull();
+    expect(fake.messages().join(' ')).toContain('Kino-Ausweich-Kanal ist jetzt <#channel-cinema>');
+  });
+
+  it('sets and clears the cinema role', async () => {
+    const context = createTestContext();
+
+    const set = createFakeCommandInteraction({
+      subcommand: 'cinema-role',
+      manageGuild: true,
+      roles: { role: { id: 'role-cinema' } },
+    });
+    await pickupConfigCommand.execute(set.interaction, context);
+    expect(context.settings.get('guild-1').cinemaRoleId).toBe('role-cinema');
+    expect(context.settings.get('guild-1').mentionRoleId).toBeNull();
+
+    const clear = createFakeCommandInteraction({ subcommand: 'cinema-role', manageGuild: true });
+    await pickupConfigCommand.execute(clear.interaction, context);
+    expect(context.settings.get('guild-1').cinemaRoleId).toBeNull();
+    expect(clear.messages().join(' ')).toContain('keine Rolle mehr');
+  });
+
+  it('refuses a plain member', async () => {
+    const context = createTestContext();
+    const fake = createFakeCommandInteraction({
+      subcommand: 'cinema-role',
+      manageGuild: false,
+      roles: { role: { id: 'role-cinema' } },
+    });
+
+    await pickupConfigCommand.execute(fake.interaction, context);
+
+    expect(context.settings.get('guild-1').cinemaRoleId).toBeNull();
+  });
+
+  it('lists both in the summary', async () => {
+    const context = createTestContext();
+    context.settings.setCinemaChannel('guild-1', 'channel-cinema');
+    context.settings.setCinemaRole('guild-1', 'role-cinema');
+    const fake = createFakeCommandInteraction({ subcommand: 'show', manageGuild: true });
+
+    await pickupConfigCommand.execute(fake.interaction, context);
+
+    const summary = fake.messages().join(' ');
+    expect(summary).toContain('**Kino-Ausweich-Kanal:** <#channel-cinema>');
+    expect(summary).toContain('**Kino-Rolle:** <@&role-cinema>');
   });
 });

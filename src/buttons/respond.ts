@@ -1,6 +1,7 @@
 import type { ButtonInteraction } from 'discord.js';
 import type { AppContext } from '../app/context.ts';
 import { withTransaction } from '../db/database.ts';
+import { mentionRoleFor } from '../db/repositories/guildSettingsRepository.ts';
 import type { CustomIdAction } from '../discord/customId.ts';
 import { replyEphemeral } from '../discord/reply.ts';
 import { applyChoice } from '../domain/pickupState.ts';
@@ -28,7 +29,7 @@ export const handleRespond = async (
         renderPickupMessage({
           pickup,
           responses: context.responses.listByPickup(pickup.id),
-          mentionRoleId: settings.mentionRoleId,
+          mentionRoleId: mentionRoleFor(settings, pickup.theme),
           emojis: settings.emojis,
           guildName: interaction.guild?.name ?? null,
           publicBaseUrl: context.publicBaseUrl,
@@ -54,7 +55,7 @@ export const handleRespond = async (
       renderPickupMessage({
         pickup,
         responses: applied.responses,
-        mentionRoleId: settings.mentionRoleId,
+        mentionRoleId: mentionRoleFor(settings, pickup.theme),
         emojis: settings.emojis,
         guildName: interaction.guild?.name ?? null,
         publicBaseUrl: context.publicBaseUrl,

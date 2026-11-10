@@ -13,6 +13,7 @@ const seedPickup = (context: TestContext, creatorId = 'creator-1'): number => {
   const id = context.pickups.create({
     guildId: 'guild-1',
     channelId: 'channel-1',
+    theme: 'game',
     creatorId,
     startsAt: null,
     startsAtText: null,
@@ -263,6 +264,7 @@ describe('calendar link on re-render', () => {
     const id = context.pickups.create({
       guildId: 'guild-1',
       channelId: 'channel-1',
+      theme: 'game',
       creatorId: 'creator-1',
       startsAt: Date.UTC(2026, 7, 22, 19, 0),
       startsAtText: null,
@@ -296,5 +298,55 @@ describe('calendar link on re-render', () => {
     await handleClose(fake.interaction, { action: 'close', pickupId: id }, context);
 
     expect(calendarUrlIn(fake.editedWith())).not.toBeNull();
+  });
+});
+
+describe('movie night buttons', () => {
+  const seedCinema = (context: TestContext): number => {
+    context.settings.setMentionRole('guild-1', 'role-valo');
+    context.settings.setCinemaRole('guild-1', 'role-cinema');
+    const id = context.pickups.create({
+      guildId: 'guild-1',
+      channelId: 'channel-1',
+      theme: 'cinema',
+      creatorId: 'creator-1',
+      startsAt: null,
+      startsAtText: null,
+      note: null,
+    });
+    context.pickups.attachMessage(id, 'message-1');
+    return id;
+  };
+
+  it('keeps the cinema role and labels when a ticket is taken', async () => {
+    const context = createTestContext();
+    const id = seedCinema(context);
+    const fake = createFakeButtonInteraction({ userId: 'u1' });
+
+    await handleRespond(
+      fake.interaction,
+      { action: 'respond', choice: 'in', pickupId: id },
+      context,
+    );
+
+    expect(labelsOf(fake.editedWith())).toEqual(['Ticket · 1', 'Komme später · 0', 'Passe · 0']);
+    expect((fake.editedWith() as { content: string }).content).toBe(
+      '🍿 Vorhang auf! <@&role-cinema>',
+    );
+  });
+
+  it('closes the box office', async () => {
+    const context = createTestContext();
+    const id = seedCinema(context);
+    const fake = createFakeButtonInteraction({ userId: 'creator-1' });
+
+    await handleClose(fake.interaction, { action: 'close', pickupId: id }, context);
+
+    const payload = fake.editedWith() as {
+      content: string;
+      embeds: { toJSON(): { footer?: { text: string } } }[];
+    };
+    expect(payload.content).toBe('');
+    expect(payload.embeds[0]?.toJSON().footer?.text).toContain('Kasse geschlossen');
   });
 });

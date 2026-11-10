@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { isPickupTheme, type PickupTheme } from '../../domain/pickupTheme.ts';
 import { asNullableNumber, asNullableText, asNumber, asText, type SqlRow } from '../rows.ts';
 
 export type PickupStatus = 'open' | 'closed';
@@ -7,6 +8,7 @@ export interface PickupRecord {
   readonly id: number;
   readonly guildId: string;
   readonly channelId: string;
+  readonly theme: PickupTheme;
   readonly messageId: string | null;
   readonly creatorId: string;
   readonly startsAt: number | null;
@@ -20,6 +22,7 @@ export interface PickupRecord {
 export interface CreatePickupInput {
   readonly guildId: string;
   readonly channelId: string;
+  readonly theme: PickupTheme;
   readonly creatorId: string;
   readonly startsAt: number | null;
   readonly startsAtText: string | null;
@@ -32,19 +35,30 @@ export interface PickupRepository {
   findById(id: number): PickupRecord | undefined;
   findByMessageId(messageId: string): PickupRecord | undefined;
   /**
-   * The most recent pickup that actually made it into the given channel.
-   * Scoped per channel because pickups no longer all live in one place.
+   * The most recent pickup of one theme that actually made it into the given
+   * channel. Scoped per channel because pickups no longer all live in one
+   * place, and per theme so `/valo-time` never moves a movie night's showtime.
    */
-  findLatestPosted(guildId: string, channelId: string): PickupRecord | undefined;
+  findLatestPosted(
+    guildId: string,
+    channelId: string,
+    theme: PickupTheme,
+  ): PickupRecord | undefined;
   setStart(id: number, startsAt: number | null, startsAtText: string | null): void;
   close(id: number, closedAt: number): void;
   remove(id: number): void;
 }
 
+const toTheme = (value: unknown): PickupTheme => {
+  const text = asText(value);
+  return isPickupTheme(text) ? text : 'game';
+};
+
 const toPickup = (row: SqlRow): PickupRecord => ({
   id: asNumber(row['id']),
   guildId: asText(row['guild_id']),
   channelId: asText(row['channel_id']),
+  theme: toTheme(row['theme']),
   messageId: asNullableText(row['message_id']),
   creatorId: asText(row['creator_id']),
   startsAt: asNullableNumber(row['starts_at']),
@@ -57,15 +71,15 @@ const toPickup = (row: SqlRow): PickupRecord => ({
 
 export const createPickupRepository = (db: DatabaseSync): PickupRepository => {
   const insertStatement = db.prepare(
-    `INSERT INTO pickups (guild_id, channel_id, creator_id, starts_at, starts_at_text, note, status, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, 'open', ?)`,
+    `INSERT INTO pickups (guild_id, channel_id, theme, creator_id, starts_at, starts_at_text, note, status, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?)`,
   );
   const attachStatement = db.prepare('UPDATE pickups SET message_id = ? WHERE id = ?');
   const byIdStatement = db.prepare('SELECT * FROM pickups WHERE id = ?');
   const byMessageStatement = db.prepare('SELECT * FROM pickups WHERE message_id = ?');
   const latestPostedStatement = db.prepare(
     `SELECT * FROM pickups
-     WHERE guild_id = ? AND channel_id = ? AND message_id IS NOT NULL
+     WHERE guild_id = ? AND channel_id = ? AND theme = ? AND message_id IS NOT NULL
      ORDER BY created_at DESC, id DESC LIMIT 1`,
   );
   const setStartStatement = db.prepare(
@@ -81,6 +95,7 @@ export const createPickupRepository = (db: DatabaseSync): PickupRepository => {
       const result = insertStatement.run(
         input.guildId,
         input.channelId,
+        input.theme,
         input.creatorId,
         input.startsAt,
         input.startsAtText,
@@ -100,8 +115,8 @@ export const createPickupRepository = (db: DatabaseSync): PickupRepository => {
       const row = byMessageStatement.get(messageId);
       return row === undefined ? undefined : toPickup(row as SqlRow);
     },
-    findLatestPosted: (guildId, channelId) => {
-      const row = latestPostedStatement.get(guildId, channelId);
+    findLatestPosted: (guildId, channelId, theme) => {
+      const row = latestPostedStatement.get(guildId, channelId, theme);
       return row === undefined ? undefined : toPickup(row as SqlRow);
     },
     setStart: (id, startsAt, startsAtText) => {

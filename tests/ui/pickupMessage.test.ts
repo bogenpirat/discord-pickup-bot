@@ -9,6 +9,7 @@ const basePickup: PickupRecord = {
   id: 12,
   guildId: 'guild-1',
   channelId: 'channel-1',
+  theme: 'game',
   messageId: 'message-1',
   creatorId: 'creator-1',
   startsAt: null,
@@ -570,5 +571,173 @@ describe('calendar buttons', () => {
     it('appears before the message id is known, unlike the google link', () => {
       expect(icalUrl({ startsAt, messageId: null })).not.toBe('');
     });
+  });
+});
+
+describe('movie night rendering', () => {
+  const cinema = (overrides: Partial<PickupRecord> = {}): PickupRecord =>
+    pickup({ theme: 'cinema', ...overrides });
+
+  const labelsOf = (payload: ReturnType<typeof render>) =>
+    payload.components[0]
+      ?.toJSON()
+      .components.map((component) => ('label' in component ? component.label : undefined));
+
+  const emojisOf = (payload: ReturnType<typeof render>) =>
+    payload.components[0]
+      ?.toJSON()
+      .components.slice(0, 3)
+      .map((component) => ('emoji' in component ? component.emoji?.name : undefined));
+
+  it('puts the marquee over the feature', () => {
+    const embed = render({
+      pickup: cinema({ note: 'Dune: Part Two' }),
+      responses: [],
+      mentionRoleId: null,
+    }).embeds[0]?.toJSON();
+
+    expect(embed?.author?.name).toBe('🎬 FILMABEND');
+    expect(embed?.title).toBe('🎞️ Dune: Part Two');
+    expect(embed?.color).toBe(0xb3121d);
+  });
+
+  it('bills a call without text as a mystery feature', () => {
+    const embed = render({ pickup: cinema(), responses: [], mentionRoleId: null }).embeds[0];
+
+    expect(embed?.toJSON().title).toBe('🎞️ Überraschungsfilm');
+  });
+
+  it('names the presenter and the showtime', () => {
+    const startsAt = Date.UTC(2026, 6, 27, 18, 30);
+    const description = render({
+      pickup: cinema({ startsAt }),
+      responses: [],
+      mentionRoleId: null,
+    }).embeds[0]?.toJSON().description;
+
+    expect(description).toContain('🎥 Präsentiert von <@creator-1>');
+    expect(description).toContain(`🕗 Vorstellung: <t:${startsAt / 1000}:t>`);
+  });
+
+  it('shows a showtime that was only given as text', () => {
+    const description = render({
+      pickup: cinema({ startsAtText: 'nach dem Essen' }),
+      responses: [],
+      mentionRoleId: null,
+    }).embeds[0]?.toJSON().description;
+
+    expect(description).toContain('🕗 Vorstellung: nach dem Essen');
+  });
+
+  it('prints the screening number on the ticket stub', () => {
+    const open = render({ pickup: cinema(), responses: [], mentionRoleId: null });
+    const closed = render({
+      pickup: cinema({ status: 'closed', closedAt: 5 }),
+      responses: [],
+      mentionRoleId: null,
+    });
+
+    expect(open.embeds[0]?.toJSON().footer?.text).toBe(
+      'Vorstellung Nr. 12 · Ticket per Button lösen',
+    );
+    expect(closed.embeds[0]?.toJSON().footer?.text).toBe('Vorstellung Nr. 12 · Kasse geschlossen');
+    expect(closed.embeds[0]?.toJSON().color).toBe(0x71767b);
+  });
+
+  it('sells tickets on the buttons', () => {
+    const payload = render({
+      pickup: cinema(),
+      responses: responses(3, 'in'),
+      mentionRoleId: null,
+    });
+
+    expect(labelsOf(payload)).toEqual([
+      'Ticket · 3',
+      'Komme später · 0',
+      'Passe · 0',
+      'Kasse schließen',
+    ]);
+  });
+
+  it('uses its own icons and ignores the configured emoji', () => {
+    const payload = render({
+      pickup: cinema(),
+      responses: [],
+      mentionRoleId: null,
+      emojis: { in: '🔥', later: '💤', out: '💀' },
+    });
+
+    expect(emojisOf(payload)).toEqual(['🎟️', '🍿', '🚪']);
+    expect(payload.embeds[0]?.toJSON().fields?.map((field) => field.name)).toEqual([
+      '🎟️ Ticket (0)',
+      '🍿 Komme später (0)',
+      '🚪 Passe (0)',
+    ]);
+  });
+
+  it('keeps the same custom ids, so the buttons need no handler of their own', () => {
+    const ids = render({ pickup: cinema(), responses: [], mentionRoleId: null })
+      .components.flatMap((row) => row.toJSON().components)
+      .map((component) => ('custom_id' in component ? component.custom_id : ''));
+
+    expect(ids.map((id) => decodeCustomId(id ?? '').ok)).toEqual([true, true, true, true]);
+  });
+
+  it('calls curtain up alongside the role ping', () => {
+    const payload = render({ pickup: cinema(), responses: [], mentionRoleId: 'role-cinema' });
+
+    expect(payload.content).toBe('🍿 Vorhang auf! <@&role-cinema>');
+    expect(payload.allowedMentions.roles).toEqual(['role-cinema']);
+  });
+
+  it('calls curtain up even without a role', () => {
+    const payload = render({ pickup: cinema(), responses: [], mentionRoleId: null });
+
+    expect(payload.content).toBe('🍿 Vorhang auf!');
+    expect(payload.allowedMentions.roles).toEqual([]);
+  });
+
+  it('goes quiet once the box office is closed', () => {
+    const payload = render({
+      pickup: cinema({ status: 'closed', closedAt: 5 }),
+      responses: [],
+      mentionRoleId: 'role-cinema',
+    });
+
+    expect(payload.content).toBe('');
+    expect(payload.allowedMentions.roles).toEqual([]);
+  });
+
+  it('titles the calendar event as a movie night', () => {
+    const payload = render({
+      pickup: cinema({ startsAt: Date.UTC(2026, 6, 27, 18, 30) }),
+      responses: [],
+      mentionRoleId: null,
+      guildName: 'Test Guild',
+    });
+    const link = payload.components[1]?.toJSON().components.find((component) => 'url' in component);
+    const url = new URL(link !== undefined && 'url' in link ? (link.url ?? '') : '');
+
+    expect(url.searchParams.get('text')).toBe('Filmabend @ Test Guild');
+  });
+
+  it('speaks english to english clients', () => {
+    const payload = render({
+      pickup: cinema({ note: 'Alien' }),
+      responses: [],
+      mentionRoleId: null,
+      locale: 'en',
+    });
+    const embed = payload.embeds[0]?.toJSON();
+
+    expect(embed?.author?.name).toBe('🎬 MOVIE NIGHT');
+    expect(embed?.footer?.text).toBe('Screening #12 · Grab a ticket below');
+    expect(payload.content).toBe('🍿 Curtain up!');
+    expect(labelsOf(payload)).toEqual([
+      'Ticket · 0',
+      'Running late · 0',
+      'Pass · 0',
+      'Close box office',
+    ]);
   });
 });

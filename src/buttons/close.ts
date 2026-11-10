@@ -1,5 +1,6 @@
 import { type ButtonInteraction, PermissionFlagsBits } from 'discord.js';
 import type { AppContext } from '../app/context.ts';
+import { mentionRoleFor } from '../db/repositories/guildSettingsRepository.ts';
 import type { CustomIdAction } from '../discord/customId.ts';
 import { replyEphemeral } from '../discord/reply.ts';
 import { renderPickupMessage } from '../ui/pickupMessage.ts';
@@ -41,7 +42,7 @@ export const handleClose = async (
       renderPickupMessage({
         pickup: closed,
         responses: context.responses.listByPickup(pickup.id),
-        mentionRoleId: settings.mentionRoleId,
+        mentionRoleId: mentionRoleFor(settings, pickup.theme),
         emojis: settings.emojis,
         guildName: interaction.guild?.name ?? null,
         publicBaseUrl: context.publicBaseUrl,

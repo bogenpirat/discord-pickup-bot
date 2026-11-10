@@ -62,6 +62,41 @@ const definition = new SlashCommandBuilder()
   )
   .addSubcommand((subcommand) =>
     subcommand
+      .setName('cinema-channel')
+      .setNameLocalizations({ de: 'kino-kanal' })
+      .setDescription('Set the fallback channel used when I cannot post where /pickup was called')
+      .setDescriptionLocalizations({
+        de: 'Ausweich-Kanal für den Fall, dass ich dort, wo /pickup genutzt wurde, nicht schreiben darf',
+      })
+      .addChannelOption((option) =>
+        option
+          .setName('channel')
+          .setNameLocalizations({ de: 'kanal' })
+          .setDescription('Fallback channel for movie nights')
+          .setDescriptionLocalizations({ de: 'Ausweich-Kanal für Filmabende' })
+          .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+          .setRequired(true),
+      ),
+  )
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName('cinema-role')
+      .setNameLocalizations({ de: 'kino-rolle' })
+      .setDescription('Set the role mentioned in /pickup movie nights')
+      .setDescriptionLocalizations({
+        de: 'Rolle festlegen, die beim Filmabend (/pickup) erwähnt wird',
+      })
+      .addRoleOption((option) =>
+        option
+          .setName('role')
+          .setNameLocalizations({ de: 'rolle' })
+          .setDescription('Role to mention, leave empty to clear')
+          .setDescriptionLocalizations({ de: 'Rolle, leer lassen zum Entfernen' })
+          .setRequired(false),
+      ),
+  )
+  .addSubcommand((subcommand) =>
+    subcommand
       .setName('admin-role')
       .setNameLocalizations({ de: 'admin-rolle' })
       .setDescription('Set a role that may also use these config commands')
@@ -227,6 +262,23 @@ const execute = async (
     return;
   }
 
+  if (subcommand === 'cinema-channel') {
+    const channel = interaction.options.getChannel('channel', true);
+    context.settings.setCinemaChannel(guildId, channel.id);
+    await replyEphemeral(interaction, strings.cinema.configChannelSaved(channel.id));
+    return;
+  }
+
+  if (subcommand === 'cinema-role') {
+    const role = interaction.options.getRole('role');
+    context.settings.setCinemaRole(guildId, role?.id ?? null);
+    await replyEphemeral(
+      interaction,
+      role === null ? strings.cinema.configRoleCleared : strings.cinema.configRoleSaved(role.id),
+    );
+    return;
+  }
+
   if (subcommand === 'emoji') {
     const choice = interaction.options.getString('option', true);
     if (!isPickupChoice(choice)) {
@@ -316,6 +368,12 @@ const execute = async (
           ? strings.notSet
           : channelMention(settings.pickupChannelId),
       role: settings.mentionRoleId === null ? strings.notSet : roleMention(settings.mentionRoleId),
+      cinemaChannel:
+        settings.cinemaChannelId === null
+          ? strings.notSet
+          : channelMention(settings.cinemaChannelId),
+      cinemaRole:
+        settings.cinemaRoleId === null ? strings.notSet : roleMention(settings.cinemaRoleId),
       adminRole:
         settings.configRoleId === null ? strings.notSet : roleMention(settings.configRoleId),
       emojis: PICKUP_CHOICES.map(

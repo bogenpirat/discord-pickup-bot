@@ -20,6 +20,7 @@ describe('createAppContext', () => {
     const id = context.pickups.create({
       guildId: 'guild-1',
       channelId: 'channel-1',
+      theme: 'game',
       creatorId: 'creator-1',
       startsAt: null,
       startsAtText: null,
@@ -98,8 +99,6 @@ describe('registries', () => {
   });
 
   it.each([
-    ['pickup', 'valo'],
-    ['pickup-time', 'valo-time'],
     ['mmr', 'elo'],
     ['mmr-private', 'elo-private'],
   ])('registers /%s as an alias of /%s', (aliasName, originalName) => {
@@ -114,17 +113,40 @@ describe('registries', () => {
     });
   });
 
-  it('runs the same handler whichever name was used', async () => {
+  it.each([
+    ['valo', 'game'],
+    ['pickup', 'cinema'],
+  ])('dispatches /%s to a %s pickup', async (commandName, theme) => {
     const registry = buildCommandRegistry();
     const context = createTestContext();
     const fake = createFakeCommandInteraction({
-      commandName: 'pickup',
-      strings: { info: 'ranked um halb 9' },
+      commandName,
+      strings: { info: 'Dune um halb 9' },
     });
 
     await registry.dispatch(fake.interaction, context);
 
-    expect(context.pickups.findByMessageId('message-1')?.note).toBe('ranked um halb 9');
+    const pickup = context.pickups.findByMessageId('message-1');
+    expect(pickup?.note).toBe('Dune um halb 9');
+    expect(pickup?.theme).toBe(theme);
+  });
+
+  it('gives /pickup and /valo the same option shape, and the two time commands too', () => {
+    // Descriptions are worded per theme; what the handlers read must match.
+    const shapeOf = (name: string) =>
+      (
+        COMMANDS.find((command) => command.name === name)?.definition as
+          | { options?: { name: string; type: number; required?: boolean; max_length?: number }[] }
+          | undefined
+      )?.options?.map(({ name: option, type, required, max_length }) => ({
+        option,
+        type,
+        required,
+        max_length,
+      }));
+
+    expect(shapeOf('pickup')).toEqual(shapeOf('valo'));
+    expect(shapeOf('pickup-time')).toEqual(shapeOf('valo-time'));
   });
 
   it('exposes a serialisable definition per command', () => {
@@ -162,6 +184,8 @@ describe('registries', () => {
     expect(names['steam-channel']).toBe('steam-kanal');
     expect(names['steam-list']).toBe('steam-liste');
     expect(names['steam-remove']).toBe('steam-entfernen');
+    expect(names['cinema-channel']).toBe('kino-kanal');
+    expect(names['cinema-role']).toBe('kino-rolle');
   });
 
   it.each(['pickup-config', 'valo-api'])(

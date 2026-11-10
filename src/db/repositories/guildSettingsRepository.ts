@@ -4,6 +4,7 @@ import {
   NO_CHOICE_EMOJIS,
   type PickupChoice,
 } from '../../domain/pickupChoice.ts';
+import type { PickupTheme } from '../../domain/pickupTheme.ts';
 import { DEFAULT_TIME_ZONE } from '../../domain/time/timezone.ts';
 import { asNullableText, asText, type SqlRow } from '../rows.ts';
 
@@ -15,7 +16,19 @@ export interface GuildSettings {
   readonly emojis: ChoiceEmojis;
   readonly timezone: string;
   readonly steamWatchChannelId: string | null;
+  /** Fallback channel for `/pickup` movie nights, kept apart from the game call's. */
+  readonly cinemaChannelId: string | null;
+  /** Role pinged by `/pickup` movie nights, kept apart from the game call's. */
+  readonly cinemaRoleId: string | null;
 }
+
+/** The role a pickup of this theme pings, or null when none is configured. */
+export const mentionRoleFor = (settings: GuildSettings, theme: PickupTheme): string | null =>
+  theme === 'cinema' ? settings.cinemaRoleId : settings.mentionRoleId;
+
+/** Where a pickup of this theme goes when the bot cannot post where it was called. */
+export const fallbackChannelFor = (settings: GuildSettings, theme: PickupTheme): string | null =>
+  theme === 'cinema' ? settings.cinemaChannelId : settings.pickupChannelId;
 
 const EMOJI_COLUMNS: Readonly<Record<PickupChoice, string>> = {
   in: 'emoji_in',
@@ -31,6 +44,8 @@ export interface GuildSettingsRepository {
   setChoiceEmoji(guildId: string, choice: PickupChoice, emoji: string | null): void;
   setTimezone(guildId: string, timezone: string): void;
   setSteamWatchChannel(guildId: string, channelId: string | null): void;
+  setCinemaChannel(guildId: string, channelId: string | null): void;
+  setCinemaRole(guildId: string, roleId: string | null): void;
 }
 
 const defaults = (guildId: string): GuildSettings => ({
@@ -41,6 +56,8 @@ const defaults = (guildId: string): GuildSettings => ({
   emojis: NO_CHOICE_EMOJIS,
   timezone: DEFAULT_TIME_ZONE,
   steamWatchChannelId: null,
+  cinemaChannelId: null,
+  cinemaRoleId: null,
 });
 
 const toSettings = (row: SqlRow): GuildSettings => ({
@@ -55,6 +72,8 @@ const toSettings = (row: SqlRow): GuildSettings => ({
   },
   timezone: asText(row['timezone']),
   steamWatchChannelId: asNullableText(row['steam_watch_channel_id']),
+  cinemaChannelId: asNullableText(row['cinema_channel_id']),
+  cinemaRoleId: asNullableText(row['cinema_role_id']),
 });
 
 export const createGuildSettingsRepository = (db: DatabaseSync): GuildSettingsRepository => {
@@ -76,6 +95,8 @@ export const createGuildSettingsRepository = (db: DatabaseSync): GuildSettingsRe
   const setConfigRole = upsert('config_role_id');
   const setTimezoneValue = upsert('timezone');
   const setSteamWatchChannelValue = upsert('steam_watch_channel_id');
+  const setCinemaChannel = upsert('cinema_channel_id');
+  const setCinemaRole = upsert('cinema_role_id');
   const setEmoji: Readonly<Record<PickupChoice, (guildId: string, emoji: string | null) => void>> =
     {
       in: upsert(EMOJI_COLUMNS.in),
@@ -100,5 +121,7 @@ export const createGuildSettingsRepository = (db: DatabaseSync): GuildSettingsRe
     setSteamWatchChannel: (guildId, channelId) => {
       setSteamWatchChannelValue(guildId, channelId);
     },
+    setCinemaChannel,
+    setCinemaRole,
   };
 };

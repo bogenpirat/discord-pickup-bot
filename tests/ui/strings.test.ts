@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { APP_LOCALES, resolveLocale, STRINGS, stringsFor } from '../../src/ui/strings.ts';
+import {
+  APP_LOCALES,
+  callStringsFor,
+  resolveLocale,
+  STRINGS,
+  stringsFor,
+} from '../../src/ui/strings.ts';
 
 describe('resolveLocale', () => {
   it.each([
@@ -52,6 +58,8 @@ describe('string tables', () => {
     const summary = strings.configSummary({
       channel: '<#c1>',
       role: '<@&r1>',
+      cinemaChannel: '<#c2>',
+      cinemaRole: '<@&r3>',
       adminRole: '<@&r2>',
       emojis: '✅ Dabei',
       timezone: 'UTC',
@@ -59,12 +67,37 @@ describe('string tables', () => {
     expect(summary).toContain('<#c1>');
     expect(summary).toContain('<@&r1>');
     expect(summary).toContain('<@&r2>');
+    expect(summary).toContain('<#c2>');
+    expect(summary).toContain('<@&r3>');
     expect(summary).toContain('UTC');
   });
 
   it.each([...APP_LOCALES])('covers all three choices for %s', (locale) => {
     const strings = stringsFor(locale);
     expect(Object.keys(strings.choice).sort()).toEqual(['in', 'later', 'out']);
+  });
+
+  it.each([...APP_LOCALES])('renders every movie night template in %s', (locale) => {
+    const cinema = stringsFor(locale).cinema;
+
+    expect(Object.keys(cinema.choice).sort()).toEqual(['in', 'later', 'out']);
+    expect(cinema.openFooter(42)).toContain('42');
+    expect(cinema.closedFooter(42)).toContain('42');
+    expect(cinema.calendarTitle('Test Guild')).toContain('Test Guild');
+    expect(cinema.calendarTitle(null)).not.toContain('@');
+    expect(cinema.posted('https://discord.com/x')).toContain('https://discord.com/x');
+    expect(cinema.postedElsewhere('c1', 'https://discord.com/x')).toContain('<#c1>');
+    expect(cinema.timeUpdated('https://discord.com/x')).toContain('https://discord.com/x');
+    expect(cinema.noTimeFound).toContain('/pickup-time');
+    expect(cinema.configChannelSaved('c1')).toContain('<#c1>');
+    expect(cinema.configRoleSaved('r1')).toContain('<@&r1>');
+  });
+
+  it.each([...APP_LOCALES])('picks the replies of each theme in %s', (locale) => {
+    const strings = stringsFor(locale);
+
+    expect(callStringsFor(strings, 'game')).toBe(strings);
+    expect(callStringsFor(strings, 'cinema')).toBe(strings.cinema);
   });
 
   it.each([...APP_LOCALES])('renders every valorant template in %s', (locale) => {

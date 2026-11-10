@@ -16,6 +16,7 @@ const seed = (startsAt: number | null = STARTS_AT): number => {
   const id = pickups.create({
     guildId: 'guild-1',
     channelId: 'channel-1',
+    theme: 'game',
     creatorId: 'creator-1',
     startsAt,
     startsAtText: null,
@@ -86,6 +87,7 @@ describe('serving a pickup', () => {
     const id = pickups.create({
       guildId: 'guild-1',
       channelId: 'channel-1',
+      theme: 'game',
       creatorId: 'creator-1',
       startsAt: STARTS_AT,
       startsAtText: null,
@@ -103,6 +105,7 @@ describe('serving a pickup', () => {
     const id = pickups.create({
       guildId: 'guild-1',
       channelId: 'channel-1',
+      theme: 'game',
       creatorId: 'creator-1',
       startsAt: STARTS_AT,
       startsAtText: null,
@@ -132,6 +135,7 @@ describe('serving a pickup', () => {
     const id = pickups.create({
       guildId: 'guild-1',
       channelId: 'channel-1',
+      theme: 'game',
       creatorId: 'creator-1',
       startsAt: STARTS_AT,
       startsAtText: null,
@@ -253,6 +257,7 @@ describe('a base url that is not a url', () => {
     const id = pickups.create({
       guildId: 'guild-1',
       channelId: 'channel-1',
+      theme: 'game',
       creatorId: 'creator-1',
       startsAt: STARTS_AT,
       startsAtText: null,
@@ -273,5 +278,24 @@ describe('a base url that is not a url', () => {
 
     expect(response.status).toBe(200);
     expect(propertyOf(response.body, 'UID')).toBe(`pickup-${id}@discord-pickup-bot`);
+  });
+});
+
+describe('a movie night in the calendar', () => {
+  it('is titled as a movie night', async () => {
+    guildNames.set('guild-1', 'Test Guild');
+    const id = pickups.create({
+      guildId: 'guild-1',
+      channelId: 'channel-1',
+      theme: 'cinema',
+      creatorId: 'creator-1',
+      startsAt: STARTS_AT,
+      startsAtText: null,
+      note: null,
+    });
+
+    expect(propertyOf((await get(`/pickup/calendar/${id}.ics`)).body, 'SUMMARY')).toBe(
+      'Filmabend @ Test Guild',
+    );
   });
 });

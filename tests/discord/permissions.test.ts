@@ -19,6 +19,8 @@ const settings = (configRoleId: string | null): GuildSettings => ({
   emojis: NO_CHOICE_EMOJIS,
   timezone: 'Europe/Berlin',
   steamWatchChannelId: null,
+  cinemaChannelId: null,
+  cinemaRoleId: null,
 });
 
 const member = (options: Parameters<typeof createFakeCommandInteraction>[0] = {}) =>

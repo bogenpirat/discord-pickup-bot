@@ -38,7 +38,10 @@ export const pickupCalendarEvent = (
     .join('\n\n');
 
   return {
-    title: strings.calendarTitle(guildName),
+    title:
+      pickup.theme === 'cinema'
+        ? strings.cinema.calendarTitle(guildName)
+        : strings.calendarTitle(guildName),
     startsAt: pickup.startsAt,
     durationMinutes: CALENDAR_DURATION_MINUTES,
     ...(details === '' ? {} : { details }),

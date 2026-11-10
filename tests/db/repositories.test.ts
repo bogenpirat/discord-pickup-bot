@@ -5,6 +5,7 @@ import { MIGRATIONS, migrate } from '../../src/db/migrations.ts';
 import { createGuildSettingsRepository } from '../../src/db/repositories/guildSettingsRepository.ts';
 import { createPickupRepository } from '../../src/db/repositories/pickupRepository.ts';
 import { createResponseRepository } from '../../src/db/repositories/responseRepository.ts';
+import type { PickupTheme } from '../../src/domain/pickupTheme.ts';
 
 const GUILD = 'guild-1';
 
@@ -22,11 +23,17 @@ beforeEach(() => {
 });
 
 const newPickup = (
-  overrides: Partial<{ startsAt: number | null; note: string | null; channelId: string }> = {},
+  overrides: Partial<{
+    startsAt: number | null;
+    note: string | null;
+    channelId: string;
+    theme: PickupTheme;
+  }> = {},
 ) =>
   createPickupRepository(db).create({
     guildId: GUILD,
     channelId: overrides.channelId ?? 'channel-1',
+    theme: overrides.theme ?? 'game',
     creatorId: 'creator-1',
     startsAt: overrides.startsAt ?? null,
     startsAtText: null,
@@ -62,6 +69,8 @@ describe('guildSettingsRepository', () => {
       emojis: { in: null, later: null, out: null },
       timezone: 'Europe/Berlin',
       steamWatchChannelId: null,
+      cinemaChannelId: null,
+      cinemaRoleId: null,
     });
     expect(db.prepare('SELECT COUNT(*) AS c FROM guild_settings').get()?.['c']).toBe(0);
   });
@@ -75,6 +84,8 @@ describe('guildSettingsRepository', () => {
     repository.setChoiceEmoji(GUILD, 'in', '🔥');
     repository.setTimezone(GUILD, 'UTC');
     repository.setSteamWatchChannel(GUILD, 'channel-steam');
+    repository.setCinemaChannel(GUILD, 'channel-cinema');
+    repository.setCinemaRole(GUILD, 'role-cinema');
 
     expect(repository.get(GUILD)).toEqual({
       guildId: GUILD,
@@ -84,6 +95,8 @@ describe('guildSettingsRepository', () => {
       emojis: { in: '🔥', later: null, out: null },
       timezone: 'UTC',
       steamWatchChannelId: 'channel-steam',
+      cinemaChannelId: 'channel-cinema',
+      cinemaRoleId: 'role-cinema',
     });
   });
 
@@ -203,9 +216,9 @@ describe('pickupRepository', () => {
     repository.attachMessage(here, 'message-1');
     repository.attachMessage(elsewhere, 'message-2');
 
-    expect(repository.findLatestPosted(GUILD, 'channel-1')?.id).toBe(here);
-    expect(repository.findLatestPosted(GUILD, 'channel-2')?.id).toBe(elsewhere);
-    expect(repository.findLatestPosted(GUILD, 'channel-3')).toBeUndefined();
+    expect(repository.findLatestPosted(GUILD, 'channel-1', 'game')?.id).toBe(here);
+    expect(repository.findLatestPosted(GUILD, 'channel-2', 'game')?.id).toBe(elsewhere);
+    expect(repository.findLatestPosted(GUILD, 'channel-3', 'game')).toBeUndefined();
   });
 
   it('skips pickups that never made it into the channel', () => {
@@ -214,7 +227,28 @@ describe('pickupRepository', () => {
     repository.attachMessage(posted, 'message-1');
     newPickup();
 
-    expect(repository.findLatestPosted(GUILD, 'channel-1')?.id).toBe(posted);
+    expect(repository.findLatestPosted(GUILD, 'channel-1', 'game')?.id).toBe(posted);
+  });
+
+  it('keeps the latest pickup of each theme apart within one channel', () => {
+    const repository = createPickupRepository(db);
+    const game = newPickup();
+    const cinema = newPickup({ theme: 'cinema' });
+    repository.attachMessage(game, 'message-1');
+    repository.attachMessage(cinema, 'message-2');
+
+    expect(repository.findById(cinema)?.theme).toBe('cinema');
+    expect(repository.findLatestPosted(GUILD, 'channel-1', 'game')?.id).toBe(game);
+    expect(repository.findLatestPosted(GUILD, 'channel-1', 'cinema')?.id).toBe(cinema);
+  });
+
+  it('reads a pickup stored before themes existed as a game call', () => {
+    db.prepare(
+      `INSERT INTO pickups (guild_id, channel_id, creator_id, status, created_at)
+       VALUES (?, 'channel-1', 'creator-1', 'open', 0)`,
+    ).run(GUILD);
+
+    expect(createPickupRepository(db).findById(1)?.theme).toBe('game');
   });
 });
 

@@ -1,4 +1,5 @@
 import type { PickupChoice } from '../domain/pickupChoice.ts';
+import type { PickupTheme } from '../domain/pickupTheme.ts';
 import type { MatchOutcome } from '../domain/valorant/matchSummary.ts';
 import type { RiotIdProblem } from '../domain/valorant/riotId.ts';
 
@@ -11,7 +12,41 @@ export const DEFAULT_LOCALE: AppLocale = 'de';
 export const resolveLocale = (discordLocale: string | null | undefined): AppLocale =>
   discordLocale?.startsWith('en') === true ? 'en' : DEFAULT_LOCALE;
 
-export interface Strings {
+/**
+ * The replies a pickup call and a time change send back to whoever ran them.
+ * Each theme words these its own way and names its own commands.
+ */
+export interface PickupCallStrings {
+  readonly noFallbackChannel: string;
+  readonly posted: (url: string) => string;
+  readonly postedElsewhere: (channelId: string, url: string) => string;
+  readonly noTimeFound: string;
+  readonly noPickupToEdit: string;
+  readonly timeUpdated: (url: string) => string;
+}
+
+/** Everything a `/pickup` movie night says differently from a game call. */
+export interface CinemaStrings extends PickupCallStrings {
+  /** The marquee above the title. */
+  readonly marquee: string;
+  /** Title when the caller wrote nothing, so the poster is never blank. */
+  readonly untitled: string;
+  /** Sent alongside the role ping, ahead of the poster. */
+  readonly curtainUp: string;
+  readonly presentedBy: string;
+  readonly showtime: string;
+  readonly choice: Readonly<Record<PickupChoice, string>>;
+  readonly closeButton: string;
+  readonly openFooter: (screening: number) => string;
+  readonly closedFooter: (screening: number) => string;
+  readonly calendarTitle: (guildName: string | null) => string;
+  readonly configChannelSaved: (channelId: string) => string;
+  readonly configRoleSaved: (roleId: string) => string;
+  readonly configRoleCleared: string;
+}
+
+export interface Strings extends PickupCallStrings {
+  readonly cinema: CinemaStrings;
   readonly choice: Readonly<Record<PickupChoice, string>>;
   readonly closeButton: string;
   readonly calendarTitle: (guildName: string | null) => string;
@@ -181,12 +216,65 @@ export interface SteamWatchListEntryParts {
 export interface ConfigSummaryParts {
   readonly channel: string;
   readonly role: string;
+  readonly cinemaChannel: string;
+  readonly cinemaRole: string;
   readonly adminRole: string;
   readonly emojis: string;
   readonly timezone: string;
 }
 
+const deCinema: CinemaStrings = {
+  marquee: '🎬 FILMABEND',
+  untitled: 'Überraschungsfilm',
+  curtainUp: '🍿 Vorhang auf!',
+  presentedBy: 'Präsentiert von',
+  showtime: 'Vorstellung',
+  choice: { in: 'Ticket', later: 'Komme später', out: 'Passe' },
+  closeButton: 'Kasse schließen',
+  openFooter: (screening) => `Vorstellung Nr. ${screening} · Ticket per Button lösen`,
+  closedFooter: (screening) => `Vorstellung Nr. ${screening} · Kasse geschlossen`,
+  calendarTitle: (guildName) => (guildName === null ? 'Filmabend' : `Filmabend @ ${guildName}`),
+  noFallbackChannel:
+    'Ich kann hier nicht schreiben und es ist kein Kino-Ausweich-Kanal gesetzt. Ein Admin kann ihn mit `/pickup-config kino-kanal` festlegen.',
+  posted: (url) => `🎬 Vorhang auf — Filmabend angekündigt: ${url}`,
+  postedElsewhere: (channelId, url) =>
+    `Ich kann hier nicht schreiben — der Filmabend läuft in <#${channelId}>: ${url}`,
+  noTimeFound:
+    'Ich habe keine Uhrzeit gefunden und zeige deinen Text als Titel. Erkannt werden z. B. `20:30`, `20 Uhr`, `halb 9`, `in 90 Minuten`, `morgen 20:30`, `Sonntag 20 Uhr`. Mit `/pickup-time` kannst du die Vorstellung nachtragen.',
+  noPickupToEdit: 'Hier läuft noch kein Filmabend, den ich ändern könnte.',
+  timeUpdated: (url) => `Vorstellung verlegt: ${url}`,
+  configChannelSaved: (channelId) => `Kino-Ausweich-Kanal ist jetzt <#${channelId}>.`,
+  configRoleSaved: (roleId) => `Zum Filmabend wird jetzt <@&${roleId}> erwähnt.`,
+  configRoleCleared: 'Zum Filmabend wird jetzt keine Rolle mehr erwähnt.',
+};
+
+const enCinema: CinemaStrings = {
+  marquee: '🎬 MOVIE NIGHT',
+  untitled: 'Mystery feature',
+  curtainUp: '🍿 Curtain up!',
+  presentedBy: 'Presented by',
+  showtime: 'Showtime',
+  choice: { in: 'Ticket', later: 'Running late', out: 'Pass' },
+  closeButton: 'Close box office',
+  openFooter: (screening) => `Screening #${screening} · Grab a ticket below`,
+  closedFooter: (screening) => `Screening #${screening} · Box office closed`,
+  calendarTitle: (guildName) => (guildName === null ? 'Movie night' : `Movie night @ ${guildName}`),
+  noFallbackChannel:
+    'I cannot post here and no cinema fallback channel is configured. An admin can set one with `/pickup-config cinema-channel`.',
+  posted: (url) => `🎬 Curtain up — movie night announced: ${url}`,
+  postedElsewhere: (channelId, url) =>
+    `I cannot post here, so the movie night is showing in <#${channelId}>: ${url}`,
+  noTimeFound:
+    'I did not find a time in there and will show your text as the title. Recognised formats include `20:30`, `8pm`, `half past 8`, `in 90 minutes`, `tomorrow 8pm`, `sunday 8pm`. Use `/pickup-time` to add the showtime afterwards.',
+  noPickupToEdit: 'No movie night is showing here yet that I could change.',
+  timeUpdated: (url) => `Showtime moved: ${url}`,
+  configChannelSaved: (channelId) => `Cinema fallback channel is now <#${channelId}>.`,
+  configRoleSaved: (roleId) => `Movie nights now mention <@&${roleId}>.`,
+  configRoleCleared: 'Movie nights will not mention a role any more.',
+};
+
 const de: Strings = {
+  cinema: deCinema,
   choice: { in: 'Dabei', later: 'Später', out: 'Raus' },
   closeButton: 'Schließen',
   calendarTitle: (guildName) =>
@@ -224,7 +312,7 @@ const de: Strings = {
   invalidEmoji: (value) =>
     `„${value}“ sieht nicht nach einem Emoji aus. Nutze ein Unicode-Emoji oder ein Server-Emoji wie \`<:name:123456789012345678>\`.`,
   configSummary: (parts) =>
-    `**Ausweich-Kanal:** ${parts.channel}\n**Rolle:** ${parts.role}\n**Admin-Rolle:** ${parts.adminRole}\n**Emojis:** ${parts.emojis}\n**Zeitzone:** \`${parts.timezone}\``,
+    `**Ausweich-Kanal:** ${parts.channel}\n**Rolle:** ${parts.role}\n**Kino-Ausweich-Kanal:** ${parts.cinemaChannel}\n**Kino-Rolle:** ${parts.cinemaRole}\n**Admin-Rolle:** ${parts.adminRole}\n**Emojis:** ${parts.emojis}\n**Zeitzone:** \`${parts.timezone}\``,
   notSet: 'nicht gesetzt',
   posted: (url) => `Pickup gepostet: ${url}`,
   postedElsewhere: (channelId, url) =>
@@ -342,6 +430,7 @@ const de: Strings = {
 };
 
 const en: Strings = {
+  cinema: enCinema,
   choice: { in: 'In', later: 'Later', out: 'Out' },
   closeButton: 'Close',
   calendarTitle: (guildName) =>
@@ -377,7 +466,7 @@ const en: Strings = {
   invalidEmoji: (value) =>
     `"${value}" does not look like an emoji. Use a unicode emoji or a server emoji such as \`<:name:123456789012345678>\`.`,
   configSummary: (parts) =>
-    `**Fallback channel:** ${parts.channel}\n**Role:** ${parts.role}\n**Admin role:** ${parts.adminRole}\n**Emojis:** ${parts.emojis}\n**Time zone:** \`${parts.timezone}\``,
+    `**Fallback channel:** ${parts.channel}\n**Role:** ${parts.role}\n**Cinema fallback channel:** ${parts.cinemaChannel}\n**Cinema role:** ${parts.cinemaRole}\n**Admin role:** ${parts.adminRole}\n**Emojis:** ${parts.emojis}\n**Time zone:** \`${parts.timezone}\``,
   notSet: 'not set',
   posted: (url) => `Pickup posted: ${url}`,
   postedElsewhere: (channelId, url) =>
@@ -492,3 +581,7 @@ const en: Strings = {
 export const STRINGS: Readonly<Record<AppLocale, Strings>> = { de, en };
 
 export const stringsFor = (locale: AppLocale): Strings => STRINGS[locale];
+
+/** The call and time-change replies for one theme. */
+export const callStringsFor = (strings: Strings, theme: PickupTheme): PickupCallStrings =>
+  theme === 'cinema' ? strings.cinema : strings;

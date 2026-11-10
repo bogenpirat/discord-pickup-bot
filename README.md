@@ -18,10 +18,12 @@ Discord's own locale.
 |---|---|---|
 | `/valo [info]` | everyone | Posts a pickup call to the channel it was used in |
 | `/valo-time <time>` | creator or config access | Sets the start time of the last pickup posted in this channel |
-| `/pickup [info]` | everyone | Same as `/valo` |
-| `/pickup-time <time>` | creator or config access | Same as `/valo-time` |
+| `/pickup [info]` | everyone | Calls a **movie night**: same mechanics as `/valo`, its own role and fallback channel, dressed up as a cinema showing |
+| `/pickup-time <time>` | creator or config access | Moves the showtime of the last movie night in this channel |
 | `/pickup-config kanal <#channel>` | config access | Fallback channel, used only when the bot cannot post where `/valo` was called |
 | `/pickup-config rolle [@role]` | config access | Role to mention, omit to clear |
+| `/pickup-config kino-kanal <#channel>` | config access | Fallback channel for `/pickup` movie nights |
+| `/pickup-config kino-rolle [@role]` | config access | Role mentioned by `/pickup` movie nights, omit to clear |
 | `/pickup-config emoji <option> [emoji]` | config access | Icon shown for one option, omit to reset |
 | `/pickup-config zeitzone <tz>` | config access | IANA zone used to read start times |
 | `/pickup-config anzeigen` | config access | Shows the current configuration |
@@ -43,11 +45,8 @@ Discord's own locale.
 | `/wd <server-id>` | everyone | Live status of a Wardogs community server from wardogserverlist.com: players, map, sky, how long the round has been running, and the server's banner over the site's status card |
 | `/wd-private <server-id>` | everyone | Same as `/wd`, answered only to you |
 
-`/pickup` and `/pickup-time` are aliases: same options, same behaviour, whichever name is
-easier to remember.
-
 English clients see `/valo info:`, `/valo-time time:`,
-`/pickup-config channel|role|timezone|emoji|show|admin-role|steam-channel|steam-list|steam-remove`
+`/pickup-config channel|role|cinema-channel|cinema-role|timezone|emoji|show|admin-role|steam-channel|steam-list|steam-remove`
 and `/valo-account link|show|refresh|unlink`.
 
 The `/valo-account`, `/valo-api` and `/elo` commands need `VALORANT_API_KEY` in `.env`.
@@ -217,6 +216,28 @@ the port can walk through them. What they would find is the event title, its sta
 a link to the message — all of it already visible in the channel the pickup was posted to.
 Even so, keep the port on your own network or behind a reverse proxy rather than open to
 the internet.
+
+### `/pickup` — movie night
+
+`/pickup` works exactly like `/valo` — same free-text field, same time recognition, same
+buttons, same calendar row — but it is a separate call with its own settings and its own
+look:
+
+- It pings the role set with `/pickup-config kino-rolle`, **not** the `/valo` role. With no
+  cinema role set, it pings nobody.
+- When the bot cannot post where it was called, it falls back to the channel set with
+  `/pickup-config kino-kanal`, not the `/valo` fallback.
+- The message is laid out like a cinema poster: a **🎬 FILMABEND** marquee, the text you
+  typed as the feature title (*Überraschungsfilm* if you typed nothing), *Präsentiert von*
+  and *Vorstellung* lines, a velvet-red embed and the pickup's number printed as the
+  screening number in the footer. The ping goes out as *🍿 Vorhang auf!*.
+- The buttons sell tickets: **🎟️ Ticket**, **🍿 Komme später**, **🚪 Passe** and
+  **Kasse schließen**. These icons are fixed; `/pickup-config emoji` only affects `/valo`.
+- The calendar entry is titled `Filmabend @ <server name>` (`Movie night @ …` in English).
+
+`/pickup-time` moves the showtime of the last movie night in the channel, and `/valo-time`
+the last game call — each leaves the other alone, even when both were posted in the same
+channel.
 
 ### Responding
 

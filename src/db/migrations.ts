@@ -77,6 +77,12 @@ export const MIGRATIONS: readonly string[] = [
     refreshed_at    INTEGER NOT NULL
   );
   `,
+  `
+  -- Every pickup posted before movie nights existed was a game call.
+  ALTER TABLE pickups ADD COLUMN theme TEXT NOT NULL DEFAULT 'game';
+  ALTER TABLE guild_settings ADD COLUMN cinema_channel_id TEXT;
+  ALTER TABLE guild_settings ADD COLUMN cinema_role_id TEXT;
+  `,
 ];
 
 const readUserVersion = (db: DatabaseSync): number =>

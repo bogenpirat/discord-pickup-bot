@@ -373,6 +373,8 @@ VALORANT_API_KEY=                         # optional; blank = no /valo-account, 
 VALORANT_RATE_LIMIT_PER_MINUTE=30         # requests per minute your key allows
 VALORANT_PLAYGROUND_SECRET=               # optional; blank = no API playground
 WARDOGS_API_KEY=                          # needed for /wd
+ADMIN_USERNAME=admin                      # web console login
+ADMIN_PASSWORD_HASH=                      # optional; blank = no web console
 ```
 
 `PUBLIC_BASE_URL` is the address the **iCal** button points at, so it has to be reachable
@@ -409,6 +411,9 @@ sent in an `X-API-Key` header on server lookups. The site refuses lookups withou
 7 Nov 2026, so `/wd` and the join page's server details need it. Join links and banners work
 without a key.
 
+`ADMIN_PASSWORD_HASH` turns on the [web console](#the-web-console). It needs
+`PUBLIC_BASE_URL` too, since the console is served by the same web server.
+
 ### 10. Start and register
 
 ```sh
@@ -434,6 +439,8 @@ Run these once per server, as someone with **Manage Server** or a `POWER_USER_ID
 ```
 
 Then `/valo 20:30` to try it. If the commands do not appear, see below.
+
+Everything above can also be set from the [web console](#the-web-console) instead.
 
 ### Troubleshooting
 
@@ -483,6 +490,82 @@ as the non-root `node` user and reports unhealthy if the gateway connection goes
 changing `HTTP_PORT` in `.env` moves the container port and the host port together. Nothing
 listens on it unless `PUBLIC_BASE_URL` is set. The health check is unrelated to the web
 server — it probes a heartbeat file, not the port.
+
+## The web console
+
+Every `/pickup-config` setting can also be changed in a browser, at
+`<PUBLIC_BASE_URL>/pickup/`, behind a username and password. It lists the servers the bot
+is in. Each server has one form with:
+
+- the `/valo` role and fallback channel,
+- the `/pickup` movie night role and fallback channel,
+- the three `/valo` response icons,
+- the time zone and the admin role,
+- the Steam watch channel, plus a list of watched games with a button to remove each.
+
+Channels and roles are dropdowns filled from what the bot can see on Discord. If a stored
+channel or role has since been deleted, it is marked *nicht mehr vorhanden* and kept
+rather than cleared. A form with a bad value saves nothing and marks the field. The pages
+are German, or English for a browser that asks for English.
+
+### Turning it on
+
+The console runs only when both `PUBLIC_BASE_URL` and `ADMIN_PASSWORD_HASH` are set. The
+password is never stored in plain text. Generate the hash with:
+
+```sh
+docker compose run --rm bot node dist/scripts/hashPassword.js   # or: npm run hash-password
+```
+
+It asks for the password twice without echoing it, and prints a line to paste into `.env`:
+
+```ini
+ADMIN_USERNAME=julian
+ADMIN_PASSWORD_HASH=scrypt:32768:8:1:…:…
+```
+
+`ADMIN_USERNAME` defaults to `admin`. A plain password in `ADMIN_PASSWORD_HASH` is refused
+at startup. The hash uses `:` rather than `$` as its separator, so Docker Compose does not
+mangle it. Restart the container after changing either value: `docker compose up -d`.
+
+### Behind Traefik
+
+The console lives at the root of the bot's `/pickup/` prefix, next to the calendar and
+Wardogs routes, so a router that forwards `PathPrefix(`/pickup/`)` to the bot already
+covers it. No extra router, middleware or prefix stripping is needed. To have the bare
+`/pickup` (no trailing slash) work as well, widen the rule; the bot redirects it to
+`/pickup/`:
+
+```yaml
+traefik.http.routers.pickup.rule: Host(`e.cthia.net`) && (Path(`/pickup`) || PathPrefix(`/pickup/`))
+```
+
+Set `PUBLIC_BASE_URL` to the public origin, `https://e.cthia.net`. The console uses it two
+ways:
+
+- An `https` origin marks the login cookie `Secure`.
+- Every form post must carry that origin in its `Origin` header (or, failing that, a
+  `Referer` under it). A mismatched value makes every login answer 403.
+
+### How it is protected
+
+- **Sessions** are a random 256-bit token in an `HttpOnly`, `SameSite=Strict` cookie,
+  scoped to `/pickup` and valid for seven days. Only a SHA-256 of the token is stored, in
+  SQLite, so a restart does not sign you out and a copy of the database holds no live
+  session. *Abmelden* deletes the session.
+- **Every form** carries a per-session CSRF token as well as the origin check above.
+- **Failed logins** are limited to five per client per fifteen minutes. After that the
+  login answers 429 even for the right password. The client is the last address in
+  `X-Forwarded-For`, which Traefik writes itself, so earlier entries a client sends are
+  ignored. This relies on the port being reachable only through Traefik, as with
+  `ports: !reset []`.
+- **Passwords** are checked with scrypt (N=2^15, r=8), in constant time. A wrong username
+  costs the same as a wrong password. A stored hash asking for more than N=2^20, r=16 or
+  p=4 is rejected, so a typo cannot stall every login.
+- **The pages** load no scripts. They send a CSP of `default-src 'none'`, refuse to be
+  framed, and are marked `no-store` and `noindex`.
+
+Logins, failed logins, sign-outs and every saved change go to the bot's log.
 
 ## The audit log
 
@@ -724,6 +807,7 @@ src/db/         schema, migrations, repositories
 src/ui/         renders domain values into Discord messages, de/en strings
 src/discord/    client, custom ids, command and button dispatch
 src/http/       the bot's own web server: socket, route table, one route per file
+src/http/admin/ the web console: login, sessions, settings form, pages, de/en strings
 src/commands/   one file per slash command
 src/buttons/    one file per button action
 src/valorant/   HenrikDev API client, with types generated from its OpenAPI spec

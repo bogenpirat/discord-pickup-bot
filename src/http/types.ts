@@ -8,6 +8,12 @@ export interface HttpRequest {
   readonly method: string;
   readonly pathname: string;
   readonly query: URLSearchParams;
+  /** Lower-cased names; a header sent more than once is joined with `, `. */
+  readonly headers: Readonly<Record<string, string>>;
+  /** The request body as text. Empty for methods that carry none. */
+  readonly body: string;
+  /** The peer that opened the socket — the reverse proxy, when there is one. */
+  readonly remoteAddress: string | null;
 }
 
 export interface HttpRoute {

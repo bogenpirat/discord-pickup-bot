@@ -1,7 +1,7 @@
 import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
-import { type RunningHttpServer, startHttpServer } from '../../src/http/server.ts';
+import { MAX_BODY_BYTES, type RunningHttpServer, startHttpServer } from '../../src/http/server.ts';
 import type { HttpRoute } from '../../src/http/types.ts';
 import { type RecordingLogger, recordingLogger, silentLogger } from '../helpers/fakes.ts';
 
@@ -24,6 +24,20 @@ const exploding: HttpRoute = {
   handle: () => {
     throw new Error('route exploded');
   },
+};
+
+const echo: HttpRoute = {
+  methods: ['POST'],
+  pattern: /^\/echo$/,
+  handle: (_match, request) => ({
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      body: request.body,
+      cookie: request.headers['cookie'] ?? null,
+      remote: request.remoteAddress,
+    }),
+  }),
 };
 
 /** Port 0 lets the OS pick a free port, which is only known once bound. */
@@ -123,5 +137,29 @@ describe('socket failures', () => {
 
     expect(recorder.find('http server error')?.level).toBe('error');
     second.close();
+  });
+
+  it('hands a post body, its headers and the peer to the route', async () => {
+    await listen([echo]);
+    const response = await fetchPath('/echo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: 'a=1' },
+      body: 'name=K%C3%A4se&x=1',
+    });
+
+    const echoed = (await response.json()) as { body: string; cookie: string; remote: string };
+    expect(echoed.body).toBe('name=K%C3%A4se&x=1');
+    expect(echoed.cookie).toBe('a=1');
+    expect(echoed.remote).toMatch(/127\.0\.0\.1/);
+  });
+
+  it('refuses a body larger than any form here', async () => {
+    await listen([echo]);
+    const response = await fetchPath('/echo', {
+      method: 'POST',
+      body: 'x'.repeat(MAX_BODY_BYTES + 1),
+    });
+
+    expect(response.status).toBe(413);
   });
 });

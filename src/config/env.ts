@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isPasswordHash } from '../lib/password.ts';
 
 const schema = z.object({
   DISCORD_TOKEN: z.string().min(1),
@@ -45,6 +46,15 @@ const schema = z.object({
   // site refuses server lookups without one from 7 Nov 2026, so blank or absent
   // leaves /wd answering that the site is not responding.
   WARDOGS_API_KEY: z.string().min(1).optional(),
+  // Login for the web console at `<PUBLIC_BASE_URL>/pickup/`. The console is
+  // served only when a hash is set, and only alongside the HTTP server. The hash
+  // comes from `npm run hash-password`; a plain password is refused so it never
+  // sits in the env file.
+  ADMIN_USERNAME: z.string().min(1).default('admin'),
+  ADMIN_PASSWORD_HASH: z
+    .string()
+    .refine(isPasswordHash, 'must be a hash from `npm run hash-password`, not a plain password')
+    .optional(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   // Where to append the audit log, one JSON line per slash command or button
   // click. Blank or absent records nothing. Under Docker this points into a

@@ -6,6 +6,9 @@ const request = (pathname: string, method = 'GET'): HttpRequest => ({
   method,
   pathname,
   query: new URLSearchParams(),
+  headers: {},
+  body: '',
+  remoteAddress: null,
 });
 
 const route = (pattern: RegExp, body: string, methods: readonly string[] = ['GET']): HttpRoute => ({

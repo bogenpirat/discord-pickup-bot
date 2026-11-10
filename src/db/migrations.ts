@@ -83,6 +83,18 @@ export const MIGRATIONS: readonly string[] = [
   ALTER TABLE guild_settings ADD COLUMN cinema_channel_id TEXT;
   ALTER TABLE guild_settings ADD COLUMN cinema_role_id TEXT;
   `,
+  `
+  -- Logins to the web console. Only a hash of the cookie's token is stored, so
+  -- a copy of the database does not hand out live sessions.
+  CREATE TABLE admin_sessions (
+    token_hash TEXT PRIMARY KEY,
+    csrf_token TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX idx_admin_sessions_expires ON admin_sessions (expires_at);
+  `,
 ];
 
 const readUserVersion = (db: DatabaseSync): number =>

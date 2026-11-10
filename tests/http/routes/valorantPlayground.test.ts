@@ -62,9 +62,17 @@ const request = (
   content: ContentCatalog = emptyContentCatalog(),
 ): Promise<HttpResponse> => {
   const target = new URL(path, BASE);
-  return resolveRequest({ method, pathname: target.pathname, query: target.searchParams }, [
-    valorantPlaygroundRoute({ client, content, secret: SECRET, logger: silentLogger() }),
-  ]);
+  return resolveRequest(
+    {
+      method,
+      pathname: target.pathname,
+      query: target.searchParams,
+      headers: {},
+      body: '',
+      remoteAddress: null,
+    },
+    [valorantPlaygroundRoute({ client, content, secret: SECRET, logger: silentLogger() })],
+  );
 };
 
 const page = (client: ValorantClient) => request(`/pickup/${SECRET}/valorant-playground`, client);

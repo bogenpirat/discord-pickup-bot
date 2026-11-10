@@ -28,14 +28,24 @@ const seed = (startsAt: number | null = STARTS_AT): number => {
 
 const get = (path: string, method = 'GET'): Promise<HttpResponse> => {
   const target = new URL(path, BASE_URL);
-  return resolveRequest({ method, pathname: target.pathname, query: target.searchParams }, [
-    pickupCalendarRoute({
-      pickups,
-      guildName: (guildId) => guildNames.get(guildId) ?? null,
-      baseUrl: BASE_URL,
-      now: () => NOW,
-    }),
-  ]);
+  return resolveRequest(
+    {
+      method,
+      pathname: target.pathname,
+      query: target.searchParams,
+      headers: {},
+      body: '',
+      remoteAddress: null,
+    },
+    [
+      pickupCalendarRoute({
+        pickups,
+        guildName: (guildId) => guildNames.get(guildId) ?? null,
+        baseUrl: BASE_URL,
+        now: () => NOW,
+      }),
+    ],
+  );
 };
 
 const propertyOf = (body: string, property: string): string | undefined =>
@@ -272,7 +282,14 @@ describe('a base url that is not a url', () => {
     });
     const target = new URL(`/pickup/calendar/${id}.ics`, BASE_URL);
     const response = await resolveRequest(
-      { method: 'GET', pathname: target.pathname, query: target.searchParams },
+      {
+        method: 'GET',
+        pathname: target.pathname,
+        query: target.searchParams,
+        headers: {},
+        body: '',
+        remoteAddress: null,
+      },
       [route],
     );
 

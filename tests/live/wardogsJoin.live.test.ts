@@ -72,7 +72,14 @@ describe('wardogserverlist.com join api', () => {
     const key = await findLiveServerKey();
     const guid = key.slice('id|'.length);
     const response = await resolveRequest(
-      { method: 'GET', pathname: `/pickup/wardogs/join/${guid}`, query: new URLSearchParams() },
+      {
+        method: 'GET',
+        pathname: `/pickup/wardogs/join/${guid}`,
+        query: new URLSearchParams(),
+        headers: {},
+        body: '',
+        remoteAddress: null,
+      },
       [wardogsJoinRoute({ wardogs: createWardogsClient(), logger: silentLogger(), now: Date.now })],
     );
 

@@ -20,7 +20,14 @@ const get = async (
   const wardogs = fakeWardogsClient(detail, null, join);
   const target = new URL(path, 'http://bot.example.net');
   const response = await resolveRequest(
-    { method: 'GET', pathname: target.pathname, query: target.searchParams },
+    {
+      method: 'GET',
+      pathname: target.pathname,
+      query: target.searchParams,
+      headers: {},
+      body: '',
+      remoteAddress: null,
+    },
     [wardogsJoinRoute({ wardogs: wardogs.client, logger: silentLogger(), now: () => NOW })],
   );
   return { response, calls: wardogs.calls };

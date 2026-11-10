@@ -7,8 +7,12 @@ import { createAuditFileSink } from './audit/file.ts';
 import { createAuditTrail, createDisabledAuditTrail } from './audit/trail.ts';
 import { loadEnv } from './config/env.ts';
 import { openDatabase } from './db/database.ts';
+import { createAdminSessionRepository } from './db/repositories/adminSessionRepository.ts';
 import { createClient } from './discord/client.ts';
+import { createGuildDirectory } from './discord/guildDirectory.ts';
 import { createSteamLinkListener } from './discord/steamLinkListener.ts';
+import { createLoginThrottle } from './http/admin/loginThrottle.ts';
+import { adminConsoleRoutes } from './http/admin/routes.ts';
 import { pickupCalendarRoute } from './http/routes/pickupCalendar.ts';
 import { valorantPlaygroundRoute } from './http/routes/valorantPlayground.ts';
 import { wardogsJoinRoute } from './http/routes/wardogsJoin.ts';
@@ -130,6 +134,34 @@ client.once(Events.ClientReady, (ready) => {
       );
     }
 
+    // The console claims the root of /pickup/, so it goes last: every other
+    // route under the prefix is more specific and wins first.
+    const passwordHash = env.ADMIN_PASSWORD_HASH;
+    const adminConsole =
+      passwordHash === undefined
+        ? []
+        : adminConsoleRoutes({
+            db,
+            settings: context.settings,
+            steamWatches: context.steamWatches,
+            sessions: createAdminSessionRepository(db),
+            directory: createGuildDirectory(client),
+            credentials: { username: env.ADMIN_USERNAME, passwordHash },
+            publicBaseUrl: baseUrl,
+            throttle: createLoginThrottle({
+              maxFailures: 5,
+              windowMs: 15 * 60 * 1000,
+              now: Date.now,
+            }),
+            logger,
+            now: Date.now,
+          });
+
+    logger.info(
+      adminConsole.length === 0 ? { enabled: false } : { enabled: true, url: `${baseUrl}/pickup/` },
+      'web console',
+    );
+
     httpServer = startHttpServer({
       port: env.HTTP_PORT,
       routes: [
@@ -141,6 +173,7 @@ client.once(Events.ClientReady, (ready) => {
         }),
         wardogsJoinRoute({ wardogs: context.wardogs, logger, now: Date.now }),
         ...playground,
+        ...adminConsole,
       ],
       logger,
     });

@@ -199,4 +199,26 @@ describe('valorant playground', () => {
       );
     },
   );
+
+  it('serves no web console unless a password hash is set', () => {
+    const env = loadEnv(minimal);
+
+    expect(env.ADMIN_PASSWORD_HASH).toBeUndefined();
+    expect(env.ADMIN_USERNAME).toBe('admin');
+  });
+
+  it('accepts a password hash and a username', () => {
+    const hash =
+      'scrypt:32768:8:1:G0A239AZ-Gy08oGAg0pO_A:GNrxvanZn_FHqgx0JCMK5JTuDTaCIyzDYrpWcHwmW9A';
+    const env = loadEnv({ ...minimal, ADMIN_USERNAME: 'julian', ADMIN_PASSWORD_HASH: hash });
+
+    expect(env.ADMIN_USERNAME).toBe('julian');
+    expect(env.ADMIN_PASSWORD_HASH).toBe(hash);
+  });
+
+  it('refuses a plain password where the hash belongs', () => {
+    expect(() => loadEnv({ ...minimal, ADMIN_PASSWORD_HASH: 'hunter2hunter2' })).toThrow(
+      /ADMIN_PASSWORD_HASH: must be a hash/,
+    );
+  });
 });

@@ -20,6 +20,7 @@ import {
 } from '../domain/pickupChoice.ts';
 import { groupByChoice, type ResponseSet, tally } from '../domain/pickupState.ts';
 import { CINEMA_CHOICE_EMOJIS } from '../domain/pickupTheme.ts';
+import { DEFAULT_TIME_ZONE } from '../domain/time/timezone.ts';
 import { pickupCalendarEvent } from './calendarEvent.ts';
 import { type AppLocale, DEFAULT_LOCALE, type Strings, stringsFor } from './strings.ts';
 
@@ -58,6 +59,8 @@ export interface PickupView {
   readonly publicBaseUrl?: string | null;
   readonly emojis?: ChoiceEmojis;
   readonly locale?: AppLocale;
+  /** The guild's time zone, which decides what counts as the same day. */
+  readonly timeZone?: string;
 }
 
 export interface PickupMessagePayload {
@@ -89,11 +92,28 @@ export const renderNames = (responses: ResponseSet, strings: Strings): string =>
   return strings.moreNames(responses.length);
 };
 
+const dayIn = (epochMilliseconds: number, timeZone: string): Temporal.PlainDate =>
+  Temporal.Instant.fromEpochMilliseconds(epochMilliseconds)
+    .toZonedDateTimeISO(timeZone)
+    .toPlainDate();
+
+/**
+ * A start on the day the pickup was called needs only its time; one on a later
+ * day carries the date too, so "20:30" cannot be mistaken for tonight. The day
+ * is judged against the call rather than the render, so the format stays put
+ * while the message is re-rendered on every response.
+ */
+const startStyle = (pickup: PickupRecord, startsAt: number, timeZone: string) =>
+  dayIn(startsAt, timeZone).equals(dayIn(pickup.createdAt, timeZone))
+    ? TimestampStyles.ShortTime
+    : TimestampStyles.ShortDateTime;
+
 /** How the start reads, or null when there is nothing to say about it. */
-const renderStart = (pickup: PickupRecord): string | null => {
+const renderStart = (pickup: PickupRecord, timeZone: string): string | null => {
   if (pickup.startsAt !== null) {
     const startsAt = new Date(pickup.startsAt);
-    return `${time(startsAt, TimestampStyles.ShortTime)} (${time(startsAt, TimestampStyles.RelativeTime)})`;
+    const style = startStyle(pickup, pickup.startsAt, timeZone);
+    return `${time(startsAt, style)} (${time(startsAt, TimestampStyles.RelativeTime)})`;
   }
   return pickup.startsAtText;
 };
@@ -149,7 +169,7 @@ const buildGameEmbed = (view: PickupView, strings: Strings): EmbedBuilder => {
     });
 
   const lines = [`${strings.organizer}: ${userMention(view.pickup.creatorId)}`];
-  const start = renderStart(view.pickup);
+  const start = renderStart(view.pickup, view.timeZone ?? DEFAULT_TIME_ZONE);
   if (start !== null) {
     lines.push(`${strings.startsAt}: ${start}`);
   }
@@ -177,7 +197,7 @@ const buildCinemaEmbed = (view: PickupView, strings: Strings): EmbedBuilder => {
     });
 
   const lines = [`${PRESENTER_EMOJI} ${cinema.presentedBy} ${userMention(view.pickup.creatorId)}`];
-  const start = renderStart(view.pickup);
+  const start = renderStart(view.pickup, view.timeZone ?? DEFAULT_TIME_ZONE);
   if (start !== null) {
     lines.push(`${SHOWTIME_EMOJI} ${cinema.showtime}: ${start}`);
   }

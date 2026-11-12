@@ -44,6 +44,7 @@ export const handleClose = async (
         responses: context.responses.listByPickup(pickup.id),
         mentionRoleId: mentionRoleFor(settings, pickup.theme),
         emojis: settings.emojis,
+        timeZone: settings.timezone,
         guildName: interaction.guild?.name ?? null,
         publicBaseUrl: context.publicBaseUrl,
       }),

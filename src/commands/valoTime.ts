@@ -131,6 +131,7 @@ const retimePickup =
             responses: context.responses.listByPickup(pickup.id),
             mentionRoleId: mentionRoleFor(settings, updated.theme),
             emojis: settings.emojis,
+            timeZone: settings.timezone,
             guildName,
             publicBaseUrl: context.publicBaseUrl,
           }),

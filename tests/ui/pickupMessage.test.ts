@@ -116,14 +116,52 @@ describe('role mention', () => {
 });
 
 describe('start time', () => {
-  it('renders a parsed time as discord timestamps', () => {
+  it('renders a start on the day of the call as a time only', () => {
+    const createdAt = Date.UTC(2026, 6, 27, 12, 0);
     const startsAt = Date.UTC(2026, 6, 27, 18, 30);
-    const payload = render({ pickup: pickup({ startsAt }), responses: [], mentionRoleId: null });
+    const payload = render({
+      pickup: pickup({ createdAt, startsAt }),
+      responses: [],
+      mentionRoleId: null,
+    });
     const description = payload.embeds[0]?.toJSON().description ?? '';
     const seconds = Math.floor(startsAt / 1000);
 
     expect(description).toContain(`<t:${seconds}:t>`);
     expect(description).toContain(`<t:${seconds}:R>`);
+  });
+
+  it('adds the date to a start on a later day', () => {
+    const createdAt = Date.UTC(2026, 6, 27, 12, 0);
+    const startsAt = Date.UTC(2026, 6, 31, 18, 30);
+    const payload = render({
+      pickup: pickup({ createdAt, startsAt }),
+      responses: [],
+      mentionRoleId: null,
+    });
+    const description = payload.embeds[0]?.toJSON().description ?? '';
+    const seconds = Math.floor(startsAt / 1000);
+
+    expect(description).toContain(`<t:${seconds}:f>`);
+    expect(description).not.toContain(`<t:${seconds}:t>`);
+    expect(description).toContain(`<t:${seconds}:R>`);
+  });
+
+  it('judges the day in the guild time zone', () => {
+    // 23:00 and 01:00 in Berlin are a day apart, though one UTC day.
+    const createdAt = Date.UTC(2026, 6, 27, 21, 0);
+    const startsAt = Date.UTC(2026, 6, 27, 23, 0);
+    const seconds = Math.floor(startsAt / 1000);
+    const descriptionIn = (timeZone: string) =>
+      render({
+        pickup: pickup({ createdAt, startsAt }),
+        responses: [],
+        mentionRoleId: null,
+        timeZone,
+      }).embeds[0]?.toJSON().description ?? '';
+
+    expect(descriptionIn('Europe/Berlin')).toContain(`<t:${seconds}:f>`);
+    expect(descriptionIn('UTC')).toContain(`<t:${seconds}:t>`);
   });
 
   it('renders unparsed input verbatim without a timestamp', () => {
@@ -608,9 +646,10 @@ describe('movie night rendering', () => {
   });
 
   it('names the presenter and the showtime', () => {
+    const createdAt = Date.UTC(2026, 6, 27, 12, 0);
     const startsAt = Date.UTC(2026, 6, 27, 18, 30);
     const description = render({
-      pickup: cinema({ startsAt }),
+      pickup: cinema({ createdAt, startsAt }),
       responses: [],
       mentionRoleId: null,
     }).embeds[0]?.toJSON().description;

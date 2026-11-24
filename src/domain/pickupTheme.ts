@@ -1,8 +1,8 @@
 import type { ChoiceEmojis } from './pickupChoice.ts';
 
 /**
- * What a pickup is for. `game` is the original `/valo` call; `cinema` is a movie
- * night called with `/pickup`, which pings its own role, falls back to its own
+ * What a pickup is for. `game` is the `/valo` call (alias `/pickup`); `cinema`
+ * is a movie night called with `/cinema`, which pings its own role, falls back to its own
  * channel and dresses the message up as a cinema showing.
  */
 export const PICKUP_THEMES = ['game', 'cinema'] as const;

@@ -3,7 +3,7 @@ import type { SlashCommand } from '../discord/types.ts';
 import { createCallPickupCommand } from './callPickup.ts';
 
 const definition = new SlashCommandBuilder()
-  .setName('pickup')
+  .setName('cinema')
   .setDescription('Call a movie night')
   .setDescriptionLocalizations({ de: 'Ruf einen Filmabend aus' })
   .setContexts(InteractionContextType.Guild)
@@ -19,4 +19,4 @@ const definition = new SlashCommandBuilder()
   );
 
 /** A movie night: its own role and fallback channel, dressed up as a cinema showing. */
-export const pickupCommand: SlashCommand = createCallPickupCommand(definition.toJSON(), 'cinema');
+export const cinemaCommand: SlashCommand = createCallPickupCommand(definition.toJSON(), 'cinema');

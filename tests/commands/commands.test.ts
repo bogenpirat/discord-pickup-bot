@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { pickupCommand } from '../../src/commands/pickup.ts';
+import { cinemaCommand } from '../../src/commands/cinema.ts';
+import { cinemaTimeCommand } from '../../src/commands/cinemaTime.ts';
 import { pickupConfigCommand } from '../../src/commands/pickupConfig.ts';
 import { valoCommand } from '../../src/commands/valo.ts';
-import { pickupTimeCommand, valoTimeCommand } from '../../src/commands/valoTime.ts';
+import { valoTimeCommand } from '../../src/commands/valoTime.ts';
 import { createFakeCommandInteraction, createTestContext } from '../helpers/fakes.ts';
 
 const ADMIN_ROLE = 'role-admin';
@@ -1031,7 +1032,7 @@ describe('/valo-time', () => {
   });
 });
 
-describe('/pickup movie night', () => {
+describe('/cinema movie night', () => {
   /** Both themes configured, so each test can tell which one was used. */
   const configured = () => {
     const context = createTestContext();
@@ -1044,15 +1045,15 @@ describe('/pickup movie night', () => {
 
   const contentOf = (payload: unknown) => (payload as { content: string }).content;
 
-  it('is registered as /pickup', () => {
-    expect(pickupCommand.name).toBe('pickup');
+  it('is registered as /cinema', () => {
+    expect(cinemaCommand.name).toBe('cinema');
   });
 
   it('posts a movie night that pings the cinema role, not the game role', async () => {
     const context = configured();
     const fake = createFakeCommandInteraction({ strings: { info: 'Dune' } });
 
-    await pickupCommand.execute(fake.interaction, context);
+    await cinemaCommand.execute(fake.interaction, context);
 
     expect(context.pickups.findByMessageId('message-1')?.theme).toBe('cinema');
     expect(contentOf(fake.sent[0])).toBe('🍿 Vorhang auf! <@&role-cinema>');
@@ -1064,7 +1065,7 @@ describe('/pickup movie night', () => {
     context.settings.setMentionRole('guild-1', 'role-valo');
     const fake = createFakeCommandInteraction();
 
-    await pickupCommand.execute(fake.interaction, context);
+    await cinemaCommand.execute(fake.interaction, context);
 
     expect(contentOf(fake.sent[0])).toBe('🍿 Vorhang auf!');
   });
@@ -1076,7 +1077,7 @@ describe('/pickup movie night', () => {
       unsendableChannelIds: ['channel-7'],
     });
 
-    await pickupCommand.execute(fake.interaction, context);
+    await cinemaCommand.execute(fake.interaction, context);
 
     expect(context.pickups.findByMessageId('message-1')?.channelId).toBe('channel-cinema');
     expect(fake.messages().join(' ')).toContain('läuft in <#channel-cinema>');
@@ -1090,23 +1091,23 @@ describe('/pickup movie night', () => {
       unsendableChannelIds: ['channel-7'],
     });
 
-    await pickupCommand.execute(fake.interaction, context);
+    await cinemaCommand.execute(fake.interaction, context);
 
     expect(fake.messages().join(' ')).toContain('/pickup-config kino-kanal');
   });
 
-  it('points at /pickup-time when no time was found', async () => {
+  it('points at /cinema-time when no time was found', async () => {
     const context = configured();
     const fake = createFakeCommandInteraction({ strings: { info: 'Dune' } });
 
-    await pickupCommand.execute(fake.interaction, context);
+    await cinemaCommand.execute(fake.interaction, context);
 
-    expect(fake.messages().join(' ')).toContain('/pickup-time');
+    expect(fake.messages().join(' ')).toContain('/cinema-time');
   });
 
   it('keeps the cinema role when /valo is called right after', async () => {
     const context = configured();
-    await pickupCommand.execute(createFakeCommandInteraction().interaction, context);
+    await cinemaCommand.execute(createFakeCommandInteraction().interaction, context);
     const valo = createFakeCommandInteraction({ messageId: 'message-2' });
 
     await valoCommand.execute(valo.interaction, context);
@@ -1116,7 +1117,7 @@ describe('/pickup movie night', () => {
   });
 });
 
-describe('/pickup-time', () => {
+describe('/cinema-time', () => {
   const at = (iso: string) => Temporal.Instant.from(iso).epochMilliseconds;
 
   /** A game call first, then a movie night, both in the same channel. */
@@ -1128,15 +1129,15 @@ describe('/pickup-time', () => {
       createFakeCommandInteraction({ messageId: 'message-game' }).interaction,
       context,
     );
-    await pickupCommand.execute(
+    await cinemaCommand.execute(
       createFakeCommandInteraction({ messageId: 'message-cinema' }).interaction,
       context,
     );
     return context;
   };
 
-  it('is registered as /pickup-time', () => {
-    expect(pickupTimeCommand.name).toBe('pickup-time');
+  it('is registered as /cinema-time', () => {
+    expect(cinemaTimeCommand.name).toBe('cinema-time');
   });
 
   it('moves the movie night and leaves the game call alone', async () => {
@@ -1146,7 +1147,7 @@ describe('/pickup-time', () => {
       strings: { time: '20:30' },
     });
 
-    await pickupTimeCommand.execute(fake.interaction, context);
+    await cinemaTimeCommand.execute(fake.interaction, context);
 
     expect(context.pickups.findByMessageId('message-cinema')?.startsAt).toBe(
       at('2026-07-27T18:30:00Z'),
@@ -1162,7 +1163,7 @@ describe('/pickup-time', () => {
       strings: { time: '20:30' },
     });
 
-    await pickupTimeCommand.execute(fake.interaction, context);
+    await cinemaTimeCommand.execute(fake.interaction, context);
 
     expect((fake.edited.at(-1) as { content: string }).content).toBe(
       '🍿 Vorhang auf! <@&role-cinema>',
@@ -1189,7 +1190,7 @@ describe('/pickup-time', () => {
     await valoCommand.execute(createFakeCommandInteraction().interaction, context);
     const fake = createFakeCommandInteraction({ strings: { time: '20:30' } });
 
-    await pickupTimeCommand.execute(fake.interaction, context);
+    await cinemaTimeCommand.execute(fake.interaction, context);
 
     expect(fake.messages().join(' ')).toContain('noch kein Filmabend');
   });

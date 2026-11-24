@@ -25,7 +25,7 @@ export interface PickupCallStrings {
   readonly timeUpdated: (url: string) => string;
 }
 
-/** Everything a `/pickup` movie night says differently from a game call. */
+/** Everything a `/cinema` movie night says differently from a game call. */
 export interface CinemaStrings extends PickupCallStrings {
   /** The marquee above the title. */
   readonly marquee: string;
@@ -240,7 +240,7 @@ const deCinema: CinemaStrings = {
   postedElsewhere: (channelId, url) =>
     `Ich kann hier nicht schreiben — der Filmabend läuft in <#${channelId}>: ${url}`,
   noTimeFound:
-    'Ich habe keine Uhrzeit gefunden und zeige deinen Text als Titel. Erkannt werden z. B. `20:30`, `20 Uhr`, `halb 9`, `in 90 Minuten`, `morgen 20:30`, `Sonntag 20 Uhr`. Mit `/pickup-time` kannst du die Vorstellung nachtragen.',
+    'Ich habe keine Uhrzeit gefunden und zeige deinen Text als Titel. Erkannt werden z. B. `20:30`, `20 Uhr`, `halb 9`, `in 90 Minuten`, `morgen 20:30`, `Sonntag 20 Uhr`. Mit `/cinema-time` kannst du die Vorstellung nachtragen.',
   noPickupToEdit: 'Hier läuft noch kein Filmabend, den ich ändern könnte.',
   timeUpdated: (url) => `Vorstellung verlegt: ${url}`,
   configChannelSaved: (channelId) => `Kino-Ausweich-Kanal ist jetzt <#${channelId}>.`,
@@ -265,7 +265,7 @@ const enCinema: CinemaStrings = {
   postedElsewhere: (channelId, url) =>
     `I cannot post here, so the movie night is showing in <#${channelId}>: ${url}`,
   noTimeFound:
-    'I did not find a time in there and will show your text as the title. Recognised formats include `20:30`, `8pm`, `half past 8`, `in 90 minutes`, `tomorrow 8pm`, `sunday 8pm`. Use `/pickup-time` to add the showtime afterwards.',
+    'I did not find a time in there and will show your text as the title. Recognised formats include `20:30`, `8pm`, `half past 8`, `in 90 minutes`, `tomorrow 8pm`, `sunday 8pm`. Use `/cinema-time` to add the showtime afterwards.',
   noPickupToEdit: 'No movie night is showing here yet that I could change.',
   timeUpdated: (url) => `Showtime moved: ${url}`,
   configChannelSaved: (channelId) => `Cinema fallback channel is now <#${channelId}>.`,

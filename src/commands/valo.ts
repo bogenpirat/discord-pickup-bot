@@ -4,7 +4,7 @@ import { createCallPickupCommand } from './callPickup.ts';
 
 const definition = new SlashCommandBuilder()
   .setName('valo')
-  .setDescription('Call a pickup game')
+  .setDescription('Call a Valorant pickup game')
   .setDescriptionLocalizations({ de: 'Ruf eine Valorant-Runde aus' })
   .setContexts(InteractionContextType.Guild)
   .addStringOption((option) =>
@@ -18,4 +18,5 @@ const definition = new SlashCommandBuilder()
       .setRequired(false),
   );
 
+/** A game pickup, also registered as /pickup. */
 export const valoCommand: SlashCommand = createCallPickupCommand(definition.toJSON(), 'game');

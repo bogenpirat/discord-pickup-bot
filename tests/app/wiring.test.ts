@@ -81,8 +81,10 @@ describe('registries', () => {
     expect(names).toEqual([
       'valo',
       'pickup',
+      'cinema',
       'valo-time',
       'pickup-time',
+      'cinema-time',
       'pickup-config',
       'valo-account',
       'valo-api',
@@ -99,6 +101,8 @@ describe('registries', () => {
   });
 
   it.each([
+    ['pickup', 'valo'],
+    ['pickup-time', 'valo-time'],
     ['mmr', 'elo'],
     ['mmr-private', 'elo-private'],
   ])('registers /%s as an alias of /%s', (aliasName, originalName) => {
@@ -115,7 +119,8 @@ describe('registries', () => {
 
   it.each([
     ['valo', 'game'],
-    ['pickup', 'cinema'],
+    ['pickup', 'game'],
+    ['cinema', 'cinema'],
   ])('dispatches /%s to a %s pickup', async (commandName, theme) => {
     const registry = buildCommandRegistry();
     const context = createTestContext();
@@ -131,7 +136,7 @@ describe('registries', () => {
     expect(pickup?.theme).toBe(theme);
   });
 
-  it('gives /pickup and /valo the same option shape, and the two time commands too', () => {
+  it('gives /cinema and /valo the same option shape, and the two time commands too', () => {
     // Descriptions are worded per theme; what the handlers read must match.
     const shapeOf = (name: string) =>
       (
@@ -145,8 +150,8 @@ describe('registries', () => {
         max_length,
       }));
 
-    expect(shapeOf('pickup')).toEqual(shapeOf('valo'));
-    expect(shapeOf('pickup-time')).toEqual(shapeOf('valo-time'));
+    expect(shapeOf('cinema')).toEqual(shapeOf('valo'));
+    expect(shapeOf('cinema-time')).toEqual(shapeOf('valo-time'));
   });
 
   it('exposes a serialisable definition per command', () => {

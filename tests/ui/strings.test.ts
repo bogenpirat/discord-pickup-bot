@@ -88,7 +88,7 @@ describe('string tables', () => {
     expect(cinema.posted('https://discord.com/x')).toContain('https://discord.com/x');
     expect(cinema.postedElsewhere('c1', 'https://discord.com/x')).toContain('<#c1>');
     expect(cinema.timeUpdated('https://discord.com/x')).toContain('https://discord.com/x');
-    expect(cinema.noTimeFound).toContain('/pickup-time');
+    expect(cinema.noTimeFound).toContain('/cinema-time');
     expect(cinema.configChannelSaved('c1')).toContain('<#c1>');
     expect(cinema.configRoleSaved('r1')).toContain('<@&r1>');
   });

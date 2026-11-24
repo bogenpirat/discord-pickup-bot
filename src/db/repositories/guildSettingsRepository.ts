@@ -16,9 +16,9 @@ export interface GuildSettings {
   readonly emojis: ChoiceEmojis;
   readonly timezone: string;
   readonly steamWatchChannelId: string | null;
-  /** Fallback channel for `/pickup` movie nights, kept apart from the game call's. */
+  /** Fallback channel for `/cinema` movie nights, kept apart from the game call's. */
   readonly cinemaChannelId: string | null;
-  /** Role pinged by `/pickup` movie nights, kept apart from the game call's. */
+  /** Role pinged by `/cinema` movie nights, kept apart from the game call's. */
   readonly cinemaRoleId: string | null;
 }
 

@@ -31,9 +31,11 @@ const definition = new SlashCommandBuilder()
     subcommand
       .setName('channel')
       .setNameLocalizations({ de: 'kanal' })
-      .setDescription('Set the fallback channel used when I cannot post where /valo was called')
+      .setDescription(
+        'Set the fallback channel used when I cannot post where /valo or /pickup was called',
+      )
       .setDescriptionLocalizations({
-        de: 'Ausweich-Kanal für den Fall, dass ich dort, wo /valo genutzt wurde, nicht schreiben darf',
+        de: 'Ausweich-Kanal, falls ich dort, wo /valo oder /pickup genutzt wurde, nicht schreiben darf',
       })
       .addChannelOption((option) =>
         option
@@ -64,9 +66,9 @@ const definition = new SlashCommandBuilder()
     subcommand
       .setName('cinema-channel')
       .setNameLocalizations({ de: 'kino-kanal' })
-      .setDescription('Set the fallback channel used when I cannot post where /pickup was called')
+      .setDescription('Set the fallback channel used when I cannot post where /cinema was called')
       .setDescriptionLocalizations({
-        de: 'Ausweich-Kanal für den Fall, dass ich dort, wo /pickup genutzt wurde, nicht schreiben darf',
+        de: 'Ausweich-Kanal für den Fall, dass ich dort, wo /cinema genutzt wurde, nicht schreiben darf',
       })
       .addChannelOption((option) =>
         option
@@ -82,9 +84,9 @@ const definition = new SlashCommandBuilder()
     subcommand
       .setName('cinema-role')
       .setNameLocalizations({ de: 'kino-rolle' })
-      .setDescription('Set the role mentioned in /pickup movie nights')
+      .setDescription('Set the role mentioned in /cinema movie nights')
       .setDescriptionLocalizations({
-        de: 'Rolle festlegen, die beim Filmabend (/pickup) erwähnt wird',
+        de: 'Rolle festlegen, die beim Filmabend (/cinema) erwähnt wird',
       })
       .addRoleOption((option) =>
         option

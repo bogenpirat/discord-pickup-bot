@@ -17,13 +17,15 @@ Discord's own locale.
 | Command | Who | What |
 |---|---|---|
 | `/valo [info]` | everyone | Posts a pickup call to the channel it was used in |
-| `/valo-time <time>` | creator or config access | Sets the start time of the last pickup posted in this channel |
-| `/pickup [info]` | everyone | Calls a **movie night**: same mechanics as `/valo`, its own role and fallback channel, dressed up as a cinema showing |
-| `/pickup-time <time>` | creator or config access | Moves the showtime of the last movie night in this channel |
-| `/pickup-config kanal <#channel>` | config access | Fallback channel, used only when the bot cannot post where `/valo` was called |
+| `/pickup [info]` | everyone | Same as `/valo` |
+| `/valo-time <time>` | creator or config access | Sets the start time of the last pickup game posted in this channel |
+| `/pickup-time <time>` | creator or config access | Same as `/valo-time` |
+| `/cinema [info]` | everyone | Calls a **movie night**: same mechanics as `/valo`, its own role and fallback channel, dressed up as a cinema showing |
+| `/cinema-time <time>` | creator or config access | Moves the showtime of the last movie night in this channel |
+| `/pickup-config kanal <#channel>` | config access | Fallback channel, used only when the bot cannot post where `/valo` or `/pickup` was called |
 | `/pickup-config rolle [@role]` | config access | Role to mention, omit to clear |
-| `/pickup-config kino-kanal <#channel>` | config access | Fallback channel for `/pickup` movie nights |
-| `/pickup-config kino-rolle [@role]` | config access | Role mentioned by `/pickup` movie nights, omit to clear |
+| `/pickup-config kino-kanal <#channel>` | config access | Fallback channel for `/cinema` movie nights |
+| `/pickup-config kino-rolle [@role]` | config access | Role mentioned by `/cinema` movie nights, omit to clear |
 | `/pickup-config emoji <option> [emoji]` | config access | Icon shown for one option, omit to reset |
 | `/pickup-config zeitzone <tz>` | config access | IANA zone used to read start times |
 | `/pickup-config anzeigen` | config access | Shows the current configuration |
@@ -45,7 +47,8 @@ Discord's own locale.
 | `/wd <server-id>` | everyone | Live status of a Wardogs community server from wardogserverlist.com: players, map, sky, how long the round has been running, and the server's banner over the site's status card |
 | `/wd-private <server-id>` | everyone | Same as `/wd`, answered only to you |
 
-English clients see `/valo info:`, `/valo-time time:`,
+English clients see `/valo info:`, `/valo-time time:`, `/cinema info:`,
+`/cinema-time time:`,
 `/pickup-config channel|role|cinema-channel|cinema-role|timezone|emoji|show|admin-role|steam-channel|steam-list|steam-remove`
 and `/valo-account link|show|refresh|unlink`.
 
@@ -101,6 +104,8 @@ see whether the Valorant API is reachable and how much of the rate limit is left
 
 ### `/valo`
 
+Also available as `/pickup`.
+
 One optional free-text field. Anything you type goes in, and the bot pulls a start time out
 of it opportunistically. **The text is never edited down** — it is shown in full as the note
 on the message, time words included, so nothing a caller wrote can go missing.
@@ -143,8 +148,10 @@ bot points you at `/valo-time`.
 
 ### `/valo-time`
 
-Corrects the start time of the **last pickup posted in the server**, for when the time was
-missing, wrong, or only decided later. Usable by the pickup's creator and by anyone with
+Also available as `/pickup-time`.
+
+Corrects the start time of the **last pickup game posted in this channel**, for when the
+time was missing, wrong, or only decided later. Usable by the pickup's creator and by anyone with
 config access — Manage Server, a power user, or the configured admin role. Closed pickups
 are refused.
 
@@ -217,9 +224,9 @@ a link to the message — all of it already visible in the channel the pickup wa
 Even so, keep the port on your own network or behind a reverse proxy rather than open to
 the internet.
 
-### `/pickup` — movie night
+### `/cinema` — movie night
 
-`/pickup` works exactly like `/valo` — same free-text field, same time recognition, same
+`/cinema` works exactly like `/valo` — same free-text field, same time recognition, same
 buttons, same calendar row — but it is a separate call with its own settings and its own
 look:
 
@@ -235,7 +242,7 @@ look:
   **Kasse schließen**. These icons are fixed; `/pickup-config emoji` only affects `/valo`.
 - The calendar entry is titled `Filmabend @ <server name>` (`Movie night @ …` in English).
 
-`/pickup-time` moves the showtime of the last movie night in the channel, and `/valo-time`
+`/cinema-time` moves the showtime of the last movie night in the channel, and `/valo-time`
 the last game call — each leaves the other alone, even when both were posted in the same
 channel.
 
@@ -498,7 +505,7 @@ Every `/pickup-config` setting can also be changed in a browser, at
 is in. Each server has one form with:
 
 - the `/valo` role and fallback channel,
-- the `/pickup` movie night role and fallback channel,
+- the `/cinema` movie night role and fallback channel,
 - the three `/valo` response icons,
 - the time zone and the admin role,
 - the Steam watch channel, plus a list of watched games with a button to remove each.

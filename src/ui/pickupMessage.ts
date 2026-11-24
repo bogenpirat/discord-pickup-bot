@@ -3,6 +3,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
+  escapeMarkdown,
   roleMention,
   TimestampStyles,
   time,
@@ -19,9 +20,10 @@ import {
   type PickupChoice,
 } from '../domain/pickupChoice.ts';
 import { groupByChoice, type ResponseSet, tally } from '../domain/pickupState.ts';
-import { CINEMA_CHOICE_EMOJIS } from '../domain/pickupTheme.ts';
+import { CINEMA_CHOICE_EMOJIS, CINEMA_CHOICES } from '../domain/pickupTheme.ts';
 import { DEFAULT_TIME_ZONE } from '../domain/time/timezone.ts';
 import { pickupCalendarEvent } from './calendarEvent.ts';
+import { movieHeading } from './movieHeading.ts';
 import { type AppLocale, DEFAULT_LOCALE, type Strings, stringsFor } from './strings.ts';
 
 const MAX_NAMES = 15;
@@ -30,6 +32,10 @@ const BUTTON_URL_LIMIT = 512;
 /** How many code points to give back per attempt at fitting a URL in a button. */
 const SHORTEN_STEP = 10;
 const ELLIPSIS = '…';
+/** Discord allows 256 for a title; this leaves room for the reel in front. */
+const TITLE_LIMIT = 240;
+/** Enough plot to know what the film is about without the poster turning into a page. */
+const PLOT_LIMIT = 350;
 
 const CALENDAR_EMOJI = '📅';
 const ICAL_EMOJI = '📆';
@@ -42,6 +48,7 @@ const CLOSED_COLOR = 0x71767b;
 const PRESENTER_EMOJI = '🎥';
 const SHOWTIME_EMOJI = '🕗';
 const REEL_EMOJI = '🎞️';
+const NOTE_EMOJI = '💬';
 
 const BUTTON_STYLES: Readonly<Record<PickupChoice, ButtonStyle>> = {
   in: ButtonStyle.Success,
@@ -118,29 +125,45 @@ const renderStart = (pickup: PickupRecord, timeZone: string): string | null => {
   return pickup.startsAtText;
 };
 
+/** One answer a pickup offers, as its button and its field show it. */
+interface ChoiceOption {
+  readonly choice: PickupChoice;
+  readonly label: string;
+  readonly emoji: string;
+}
+
 /**
- * The labels and icons on the three response buttons and their fields. A movie
- * night brings its own and ignores the per-server emoji settings, which were
- * chosen for the game call.
+ * The answers on the response buttons and their fields. A movie night offers
+ * fewer, brings its own icons and ignores the per-server emoji settings, which
+ * were chosen for the game call.
  */
 interface ChoiceDisplay {
-  readonly labels: Readonly<Record<PickupChoice, string>>;
-  readonly emojis: ChoiceEmojis;
+  readonly options: readonly ChoiceOption[];
   readonly closeButton: string;
 }
 
-const choiceDisplay = (view: PickupView, strings: Strings): ChoiceDisplay =>
-  view.pickup.theme === 'cinema'
-    ? {
-        labels: strings.cinema.choice,
-        emojis: CINEMA_CHOICE_EMOJIS,
-        closeButton: strings.cinema.closeButton,
-      }
-    : {
-        labels: strings.choice,
-        emojis: view.emojis ?? NO_CHOICE_EMOJIS,
-        closeButton: strings.closeButton,
-      };
+const choiceDisplay = (view: PickupView, strings: Strings): ChoiceDisplay => {
+  if (view.pickup.theme === 'cinema') {
+    return {
+      options: CINEMA_CHOICES.map((choice) => ({
+        choice,
+        label: strings.cinema.choice[choice],
+        emoji: CINEMA_CHOICE_EMOJIS[choice],
+      })),
+      closeButton: strings.cinema.closeButton,
+    };
+  }
+
+  const emojis: ChoiceEmojis = view.emojis ?? NO_CHOICE_EMOJIS;
+  return {
+    options: PICKUP_CHOICES.map((choice) => ({
+      choice,
+      label: strings.choice[choice],
+      emoji: emojiFor(choice, emojis),
+    })),
+    closeButton: strings.closeButton,
+  };
+};
 
 const addChoiceFields = (
   embed: EmbedBuilder,
@@ -150,15 +173,33 @@ const addChoiceFields = (
 ): void => {
   const groups = groupByChoice(view.responses);
 
-  for (const choice of PICKUP_CHOICES) {
-    const group = groups[choice];
+  for (const option of display.options) {
+    const group = groups[option.choice];
     embed.addFields({
-      name: `${emojiFor(choice, display.emojis)} ${display.labels[choice]} (${group.length})`,
+      name: `${option.emoji} ${option.label} (${group.length})`,
       value: renderNames(group, strings),
       inline: true,
     });
   }
 };
+
+/** Shortens by code point, so an emoji or accented letter is never cut in half. */
+const clip = (text: string, limit: number): string => {
+  const points = [...text];
+  return points.length <= limit
+    ? text
+    : `${points
+        .slice(0, limit - 1)
+        .join('')
+        .trimEnd()}${ELLIPSIS}`;
+};
+
+/** The plot as a quote, each line marked so a paragraph break does not end it. */
+const quotePlot = (overview: string): string =>
+  escapeMarkdown(clip(overview, PLOT_LIMIT))
+    .split('\n')
+    .map((line) => `> ${line}`)
+    .join('\n');
 
 const buildGameEmbed = (view: PickupView, strings: Strings): EmbedBuilder => {
   const embed = new EmbedBuilder()
@@ -184,25 +225,46 @@ const buildGameEmbed = (view: PickupView, strings: Strings): EmbedBuilder => {
  * A movie night is laid out like a poster: the marquee over the feature, who
  * presents it and when it shows, and the pickup's id doubling as the
  * screening number at the bottom of the ticket.
+ *
+ * A linked film takes over the title, links it to the film's page, and brings
+ * its poster and plot. Whatever else the caller wrote follows the plot, and is
+ * left out when the link and the time were all there was.
  */
 const buildCinemaEmbed = (view: PickupView, strings: Strings): EmbedBuilder => {
   const cinema = strings.cinema;
+  const { movie, note } = view.pickup;
   const closed = view.pickup.status === 'closed';
+  const feature = movie === null ? (note ?? cinema.untitled) : movieHeading(movie);
   const embed = new EmbedBuilder()
     .setAuthor({ name: cinema.marquee })
-    .setTitle(`${REEL_EMOJI} ${view.pickup.note ?? cinema.untitled}`)
+    .setTitle(`${REEL_EMOJI} ${clip(feature, TITLE_LIMIT)}`)
     .setColor(closed ? CLOSED_COLOR : CINEMA_COLOR)
     .setFooter({
       text: closed ? cinema.closedFooter(view.pickup.id) : cinema.openFooter(view.pickup.id),
     });
+
+  const blocks: string[] = [];
+  if (movie !== null) {
+    embed.setURL(movie.url);
+    if (movie.posterUrl !== null) {
+      embed.setThumbnail(movie.posterUrl);
+    }
+    if (movie.overview !== null) {
+      blocks.push(quotePlot(movie.overview));
+    }
+    if (note !== null) {
+      blocks.push(`${NOTE_EMOJI} ${note}`);
+    }
+  }
 
   const lines = [`${PRESENTER_EMOJI} ${cinema.presentedBy} ${userMention(view.pickup.creatorId)}`];
   const start = renderStart(view.pickup, view.timeZone ?? DEFAULT_TIME_ZONE);
   if (start !== null) {
     lines.push(`${SHOWTIME_EMOJI} ${cinema.showtime}: ${start}`);
   }
+  blocks.push(lines.join('\n'));
 
-  embed.setDescription(lines.join('\n'));
+  embed.setDescription(blocks.join('\n\n'));
   addChoiceFields(embed, view, strings, choiceDisplay(view, strings));
 
   return embed;
@@ -316,12 +378,12 @@ const buildComponents = (
   const display = choiceDisplay(view, strings);
 
   const actions = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    ...PICKUP_CHOICES.map((choice) =>
+    ...display.options.map((option) =>
       new ButtonBuilder()
-        .setCustomId(encodeRespond(choice, view.pickup.id))
-        .setLabel(`${display.labels[choice]} · ${counts[choice]}`)
-        .setStyle(BUTTON_STYLES[choice])
-        .setEmoji(emojiFor(choice, display.emojis))
+        .setCustomId(encodeRespond(option.choice, view.pickup.id))
+        .setLabel(`${option.label} · ${counts[option.choice]}`)
+        .setStyle(BUTTON_STYLES[option.choice])
+        .setEmoji(option.emoji)
         .setDisabled(disabled),
     ),
     new ButtonBuilder()
@@ -333,7 +395,8 @@ const buildComponents = (
 
   // Link buttons open the calendar directly, so they stay usable even on a
   // closed pickup — the game itself is still happening. They live on their own
-  // row because the four buttons above already fill Discord's limit of five.
+  // row because the game call's four buttons above already come close to
+  // Discord's limit of five.
   const googleUrl = buildGoogleUrl(view.pickup, view.guildName ?? null, strings);
   const icalUrl = buildIcalUrl(view.pickup, view.publicBaseUrl ?? null, locale);
 

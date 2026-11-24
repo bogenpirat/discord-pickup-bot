@@ -80,11 +80,14 @@ describe('string tables', () => {
   it.each([...APP_LOCALES])('renders every movie night template in %s', (locale) => {
     const cinema = stringsFor(locale).cinema;
 
-    expect(Object.keys(cinema.choice).sort()).toEqual(['in', 'later', 'out']);
+    expect(Object.keys(cinema.choice).sort()).toEqual(['in', 'out']);
     expect(cinema.openFooter(42)).toContain('42');
     expect(cinema.closedFooter(42)).toContain('42');
-    expect(cinema.calendarTitle('Test Guild')).toContain('Test Guild');
-    expect(cinema.calendarTitle(null)).not.toContain('@');
+    expect(cinema.calendarTitle('Test Guild', null)).toContain('Test Guild');
+    expect(cinema.calendarTitle(null, null)).not.toContain('@');
+    expect(cinema.calendarTitle('Test Guild', 'Alien (1979)')).toContain('Alien (1979)');
+    expect(cinema.noShowtimeFound).toContain('/cinema-time');
+    expect(cinema.movieNotFound).toContain('TMDB');
     expect(cinema.posted('https://discord.com/x')).toContain('https://discord.com/x');
     expect(cinema.postedElsewhere('c1', 'https://discord.com/x')).toContain('<#c1>');
     expect(cinema.timeUpdated('https://discord.com/x')).toContain('https://discord.com/x');

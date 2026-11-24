@@ -95,6 +95,16 @@ export const MIGRATIONS: readonly string[] = [
 
   CREATE INDEX idx_admin_sessions_expires ON admin_sessions (expires_at);
   `,
+  `
+  -- The film a movie night shows, looked up on TMDB once when it is called, so
+  -- re-rendering the poster on every click does not ask TMDB again. A title is
+  -- what marks a pickup as having one; the rest may be missing on TMDB.
+  ALTER TABLE pickups ADD COLUMN movie_title TEXT;
+  ALTER TABLE pickups ADD COLUMN movie_year INTEGER;
+  ALTER TABLE pickups ADD COLUMN movie_overview TEXT;
+  ALTER TABLE pickups ADD COLUMN movie_poster_url TEXT;
+  ALTER TABLE pickups ADD COLUMN movie_url TEXT;
+  `,
 ];
 
 const readUserVersion = (db: DatabaseSync): number =>

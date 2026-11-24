@@ -7,14 +7,19 @@ const BARE_NUMBER = /^\d{1,2}$/;
 export interface ExtractedTime {
   readonly startsAt: Temporal.ZonedDateTime | null;
   readonly matched: string | null;
+  /**
+   * The text with the words that named the time taken out, for a caller that
+   * shows the time on its own. The whole text when no time was found.
+   */
+  readonly remainder: string;
 }
 
 const trimEdges = (value: string): string => value.replace(EDGE_PUNCTUATION, '');
 
 /**
- * Finds a start time inside free text. The text itself is left alone — callers
- * keep showing it in full, so the matched words are reported rather than
- * removed.
+ * Finds a start time inside free text. The text itself is left alone — most
+ * callers keep showing it in full — so the matched words are reported, and
+ * what remains without them is offered alongside.
  */
 export const extractStartTime = (
   input: string,
@@ -27,7 +32,7 @@ export const extractStartTime = (
     .filter((token) => token !== '');
 
   if (tokens.length === 0) {
-    return { startsAt: null, matched: null };
+    return { startsAt: null, matched: null, remainder: '' };
   }
 
   for (let size = Math.min(MAX_WINDOW, tokens.length); size >= 1; size -= 1) {
@@ -47,9 +52,10 @@ export const extractStartTime = (
         continue;
       }
 
-      return { startsAt: parsed.value, matched: candidate };
+      const remainder = [...tokens.slice(0, start), ...tokens.slice(start + size)].join(' ');
+      return { startsAt: parsed.value, matched: candidate, remainder };
     }
   }
 
-  return { startsAt: null, matched: null };
+  return { startsAt: null, matched: null, remainder: tokens.join(' ') };
 };

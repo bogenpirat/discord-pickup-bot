@@ -1105,6 +1105,106 @@ describe('/cinema movie night', () => {
     expect(fake.messages().join(' ')).toContain('/cinema-time');
   });
 
+  describe('with a linked film', () => {
+    const ALIEN = {
+      title: 'Alien',
+      year: 1979,
+      overview: 'In space no one can hear you scream.',
+      posterUrl: 'https://image.tmdb.org/t/p/w342/alien.jpg',
+    };
+
+    /** A TMDB that knows Alien and records what it was asked. */
+    const withMovies = (found: typeof ALIEN | null = ALIEN) => {
+      const lookups: unknown[] = [];
+      const context = {
+        ...configured(),
+        movies: {
+          lookup: async (ref: unknown, language: string) => {
+            lookups.push({ ref, language });
+            return found;
+          },
+        },
+      };
+      return { context, lookups };
+    };
+
+    it('stores the film and takes the link and the time out of the text', async () => {
+      const { context, lookups } = withMovies();
+      const fake = createFakeCommandInteraction({
+        strings: { info: 'https://www.imdb.com/title/tt0078748/ heute 20 Uhr — mit Pizza' },
+      });
+
+      await cinemaCommand.execute(fake.interaction, context);
+
+      const pickup = context.pickups.findByMessageId('message-1');
+      expect(lookups).toEqual([{ ref: { source: 'imdb', id: 'tt0078748' }, language: 'de-DE' }]);
+      expect(pickup?.movie).toEqual({ ...ALIEN, url: 'https://www.imdb.com/title/tt0078748/' });
+      expect(pickup?.note).toBe('mit Pizza');
+      expect(pickup?.startsAt).toBe(Date.parse('2026-07-27T18:00:00Z'));
+    });
+
+    it('keeps no text when the link and the time were all there was', async () => {
+      const { context } = withMovies();
+      const fake = createFakeCommandInteraction({
+        strings: { info: '20:30 https://www.themoviedb.org/movie/348-alien' },
+      });
+
+      await cinemaCommand.execute(fake.interaction, context);
+
+      expect(context.pickups.findByMessageId('message-1')?.note).toBeNull();
+      expect(fake.messages().join(' ')).not.toContain('Uhrzeit');
+    });
+
+    it('asks for a showtime without calling the text the title', async () => {
+      const { context } = withMovies();
+      const fake = createFakeCommandInteraction({
+        strings: { info: 'https://www.themoviedb.org/movie/348' },
+      });
+
+      await cinemaCommand.execute(fake.interaction, context);
+
+      const reply = fake.messages().join(' ');
+      expect(reply).toContain('/cinema-time');
+      expect(reply).not.toContain('als Titel');
+    });
+
+    it('keeps the text as written when the film cannot be found', async () => {
+      const { context } = withMovies(null);
+      const info = 'https://www.themoviedb.org/movie/348 heute 20 Uhr';
+      const fake = createFakeCommandInteraction({ strings: { info } });
+
+      await cinemaCommand.execute(fake.interaction, context);
+
+      const pickup = context.pickups.findByMessageId('message-1');
+      expect(pickup?.movie).toBeNull();
+      expect(pickup?.note).toBe(info);
+      expect(pickup?.startsAt).toBe(Date.parse('2026-07-27T18:00:00Z'));
+      expect(fake.messages().join(' ')).toContain('nicht nachschlagen');
+    });
+
+    it('leaves the link alone when no TMDB key is configured', async () => {
+      const context = configured();
+      const info = 'https://www.themoviedb.org/movie/348 heute 20 Uhr';
+      const fake = createFakeCommandInteraction({ strings: { info } });
+
+      await cinemaCommand.execute(fake.interaction, context);
+
+      expect(context.pickups.findByMessageId('message-1')?.note).toBe(info);
+      expect(fake.messages().join(' ')).not.toContain('nachschlagen');
+    });
+
+    it('does not look up films for a game call', async () => {
+      const { context, lookups } = withMovies();
+      const info = 'https://www.themoviedb.org/movie/348 20 Uhr';
+      const fake = createFakeCommandInteraction({ strings: { info } });
+
+      await valoCommand.execute(fake.interaction, context);
+
+      expect(lookups).toEqual([]);
+      expect(context.pickups.findByMessageId('message-1')?.note).toBe(info);
+    });
+  });
+
   it('keeps the cinema role when /valo is called right after', async () => {
     const context = configured();
     await cinemaCommand.execute(createFakeCommandInteraction().interaction, context);

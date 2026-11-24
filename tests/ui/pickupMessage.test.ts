@@ -15,6 +15,7 @@ const basePickup: PickupRecord = {
   startsAt: null,
   startsAtText: null,
   note: null,
+  movie: null,
   status: 'open',
   createdAt: 0,
   closedAt: null,
@@ -624,7 +625,7 @@ describe('movie night rendering', () => {
   const emojisOf = (payload: ReturnType<typeof render>) =>
     payload.components[0]
       ?.toJSON()
-      .components.slice(0, 3)
+      .components.slice(0, 2)
       .map((component) => ('emoji' in component ? component.emoji?.name : undefined));
 
   it('puts the marquee over the feature', () => {
@@ -690,12 +691,7 @@ describe('movie night rendering', () => {
       mentionRoleId: null,
     });
 
-    expect(labelsOf(payload)).toEqual([
-      'Ticket · 3',
-      'Komme später · 0',
-      'Passe · 0',
-      'Kasse schließen',
-    ]);
+    expect(labelsOf(payload)).toEqual(['Ticket · 3', 'Passe · 0', 'Kasse schließen']);
   });
 
   it('uses its own icons and ignores the configured emoji', () => {
@@ -706,10 +702,9 @@ describe('movie night rendering', () => {
       emojis: { in: '🔥', later: '💤', out: '💀' },
     });
 
-    expect(emojisOf(payload)).toEqual(['🎟️', '🍿', '🚪']);
+    expect(emojisOf(payload)).toEqual(['🎟️', '🚪']);
     expect(payload.embeds[0]?.toJSON().fields?.map((field) => field.name)).toEqual([
       '🎟️ Ticket (0)',
-      '🍿 Komme später (0)',
       '🚪 Passe (0)',
     ]);
   });
@@ -719,7 +714,7 @@ describe('movie night rendering', () => {
       .components.flatMap((row) => row.toJSON().components)
       .map((component) => ('custom_id' in component ? component.custom_id : ''));
 
-    expect(ids.map((id) => decodeCustomId(id ?? '').ok)).toEqual([true, true, true, true]);
+    expect(ids.map((id) => decodeCustomId(id ?? '').ok)).toEqual([true, true, true]);
   });
 
   it('calls curtain up alongside the role ping', () => {
@@ -760,6 +755,84 @@ describe('movie night rendering', () => {
     expect(url.searchParams.get('text')).toBe('Filmabend @ Test Guild');
   });
 
+  describe('with a linked film', () => {
+    const alien = {
+      title: 'Alien',
+      year: 1979,
+      overview: 'Die Crew der *Nostromo* empfängt ein Notsignal.',
+      posterUrl: 'https://image.tmdb.org/t/p/w342/alien.jpg',
+      url: 'https://www.themoviedb.org/movie/348',
+    };
+
+    const embedOf = (overrides: Partial<PickupRecord>) =>
+      render({
+        pickup: cinema({ movie: alien, ...overrides }),
+        responses: [],
+        mentionRoleId: null,
+      }).embeds[0]?.toJSON();
+
+    it('bills the film by title and year, linked to its page', () => {
+      const embed = embedOf({});
+
+      expect(embed?.title).toBe('🎞️ Alien (1979)');
+      expect(embed?.url).toBe('https://www.themoviedb.org/movie/348');
+    });
+
+    it('hangs the poster next to the title', () => {
+      expect(embedOf({})?.thumbnail?.url).toBe('https://image.tmdb.org/t/p/w342/alien.jpg');
+    });
+
+    it('quotes the plot, escaped, above the presenter', () => {
+      const description = embedOf({})?.description ?? '';
+
+      expect(description.startsWith('> Die Crew der \\*Nostromo\\* empfängt ein Notsignal.')).toBe(
+        true,
+      );
+      expect(description).toContain('🎥 Präsentiert von <@creator-1>');
+    });
+
+    it('shows what else the caller wrote under the plot', () => {
+      const description = embedOf({ note: 'mit Pizza' })?.description ?? '';
+
+      expect(description).toContain('Notsignal.\n\n💬 mit Pizza\n\n🎥');
+    });
+
+    it('leaves the text out when nothing else was written', () => {
+      expect(embedOf({ note: null })?.description).not.toContain('💬');
+    });
+
+    it('cuts a long plot short', () => {
+      const description = embedOf({ movie: { ...alien, overview: 'a'.repeat(2000) } })?.description;
+
+      expect(description?.split('\n')[0]).toHaveLength(2 + 350);
+      expect(description?.split('\n')[0]?.endsWith('…')).toBe(true);
+    });
+
+    it('does without what TMDB does not know', () => {
+      const embed = embedOf({ movie: { ...alien, year: null, overview: null, posterUrl: null } });
+
+      expect(embed?.title).toBe('🎞️ Alien');
+      expect(embed?.thumbnail).toBeUndefined();
+      expect(embed?.description?.startsWith('🎥')).toBe(true);
+    });
+
+    it('names the film in the calendar event', () => {
+      const payload = render({
+        pickup: cinema({ movie: alien, startsAt: Date.UTC(2026, 6, 27, 18, 30) }),
+        responses: [],
+        mentionRoleId: null,
+        guildName: 'Test Guild',
+      });
+      const link = payload.components[1]
+        ?.toJSON()
+        .components.find((component) => 'url' in component);
+      const url = new URL(link !== undefined && 'url' in link ? (link.url ?? '') : '');
+
+      expect(url.searchParams.get('text')).toBe('Filmabend: Alien (1979) @ Test Guild');
+      expect(url.searchParams.get('details')).toContain('https://www.themoviedb.org/movie/348');
+    });
+  });
+
   it('speaks english to english clients', () => {
     const payload = render({
       pickup: cinema({ note: 'Alien' }),
@@ -772,11 +845,6 @@ describe('movie night rendering', () => {
     expect(embed?.author?.name).toBe('🎬 MOVIE NIGHT');
     expect(embed?.footer?.text).toBe('Screening #12 · Grab a ticket below');
     expect(payload.content).toBe('🍿 Curtain up!');
-    expect(labelsOf(payload)).toEqual([
-      'Ticket · 0',
-      'Running late · 0',
-      'Pass · 0',
-      'Close box office',
-    ]);
+    expect(labelsOf(payload)).toEqual(['Ticket · 0', 'Pass · 0', 'Close box office']);
   });
 });

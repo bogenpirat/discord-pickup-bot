@@ -21,6 +21,7 @@ import { createRateLimiter } from './lib/rateLimiter.ts';
 import { createLogger } from './logger.ts';
 import { createSteamClient } from './steam/client.ts';
 import { startSteamWatchPoller } from './steam/poller.ts';
+import { createTmdbClient } from './tmdb/client.ts';
 import { createValorantClient, type ValorantClient } from './valorant/client.ts';
 import { createWardogsClient } from './wardogs/client.ts';
 
@@ -67,6 +68,9 @@ logger.info(
 
 logger.info({ apiKey: env.WARDOGS_API_KEY !== undefined }, 'wardogs api client');
 
+const movies = env.TMDB_API_KEY === undefined ? null : createTmdbClient(env.TMDB_API_KEY);
+logger.info({ enabled: movies !== null }, 'tmdb client');
+
 const context = createAppContext(
   db,
   logger,
@@ -75,6 +79,7 @@ const context = createAppContext(
   valorant,
   audit,
   createWardogsClient(fetch, Date.now, env.WARDOGS_API_KEY ?? null),
+  movies,
 );
 const commands = buildCommandRegistry();
 const buttons = buildButtonRegistry();

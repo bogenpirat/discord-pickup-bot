@@ -22,6 +22,7 @@ import {
 } from '../db/repositories/steamWatchRepository.ts';
 import { createKeyedMutex, type KeyedMutex } from '../lib/mutex.ts';
 import type { Logger } from '../logger.ts';
+import type { TmdbClient } from '../tmdb/client.ts';
 import type { ValorantClient } from '../valorant/client.ts';
 import { type ContentCatalog, createContentCatalog } from '../valorant/contentCatalog.ts';
 import { createWardogsClient, type WardogsClient } from '../wardogs/client.ts';
@@ -49,6 +50,8 @@ export interface AppContext {
   readonly content: ContentCatalog;
   /** The wardogserverlist.com client. Present without an API key too; the site then refuses lookups. */
   readonly wardogs: WardogsClient;
+  /** Looks up films linked in a movie night, or null when no TMDB key is configured. */
+  readonly movies: TmdbClient | null;
   now(): Temporal.Instant;
 }
 
@@ -60,6 +63,7 @@ export const createAppContext = (
   valorant: ValorantClient | null = null,
   audit: AuditTrail = createDisabledAuditTrail(),
   wardogs: WardogsClient = createWardogsClient(),
+  movies: TmdbClient | null = null,
 ): AppContext => ({
   db,
   settings: createGuildSettingsRepository(db),
@@ -77,5 +81,6 @@ export const createAppContext = (
   // context already has, and one catalog per context is the point of it.
   content: createContentCatalog({ client: valorant, logger }),
   wardogs,
+  movies,
   now: () => Temporal.Now.instant(),
 });

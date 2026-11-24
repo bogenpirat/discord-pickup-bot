@@ -5,6 +5,7 @@ import { mentionRoleFor } from '../db/repositories/guildSettingsRepository.ts';
 import type { CustomIdAction } from '../discord/customId.ts';
 import { replyEphemeral } from '../discord/reply.ts';
 import { applyChoice } from '../domain/pickupState.ts';
+import { choicesFor } from '../domain/pickupTheme.ts';
 import { renderPickupMessage } from '../ui/pickupMessage.ts';
 import { resolveLocale, stringsFor } from '../ui/strings.ts';
 
@@ -23,7 +24,11 @@ export const handleRespond = async (
       return;
     }
 
-    if (pickup.status === 'closed') {
+    // A movie night posted before it lost its "running late" button can still
+    // show one. Clicking it records nothing and redraws the message without it.
+    const offered = choicesFor(pickup.theme).includes(parsed.choice);
+
+    if (pickup.status === 'closed' || !offered) {
       const settings = context.settings.get(pickup.guildId);
       await interaction.editReply(
         renderPickupMessage({
@@ -36,7 +41,9 @@ export const handleRespond = async (
           publicBaseUrl: context.publicBaseUrl,
         }),
       );
-      await replyEphemeral(interaction, strings.pickupAlreadyClosed);
+      if (pickup.status === 'closed') {
+        await replyEphemeral(interaction, strings.pickupAlreadyClosed);
+      }
       return;
     }
 

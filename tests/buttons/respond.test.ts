@@ -329,10 +329,25 @@ describe('movie night buttons', () => {
       context,
     );
 
-    expect(labelsOf(fake.editedWith())).toEqual(['Ticket · 1', 'Komme später · 0', 'Passe · 0']);
+    expect(labelsOf(fake.editedWith())).toEqual(['Ticket · 1', 'Passe · 0', 'Kasse schließen']);
     expect((fake.editedWith() as { content: string }).content).toBe(
       '🍿 Vorhang auf! <@&role-cinema>',
     );
+  });
+
+  it('records nothing from a running-late button left on an older poster', async () => {
+    const context = createTestContext();
+    const id = seedCinema(context);
+    const fake = createFakeButtonInteraction({ userId: 'u1' });
+
+    await handleRespond(
+      fake.interaction,
+      { action: 'respond', choice: 'later', pickupId: id },
+      context,
+    );
+
+    expect(context.responses.listByPickup(id)).toEqual([]);
+    expect(labelsOf(fake.editedWith())).toEqual(['Ticket · 0', 'Passe · 0', 'Kasse schließen']);
   });
 
   it('closes the box office', async () => {

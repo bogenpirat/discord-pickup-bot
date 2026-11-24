@@ -1,8 +1,15 @@
 import type { DatabaseSync } from 'node:sqlite';
+import type { MovieDetails } from '../../domain/movies/parseTmdb.ts';
 import { isPickupTheme, type PickupTheme } from '../../domain/pickupTheme.ts';
 import { asNullableNumber, asNullableText, asNumber, asText, type SqlRow } from '../rows.ts';
 
 export type PickupStatus = 'open' | 'closed';
+
+/** The film a movie night shows, as TMDB described it when the night was called. */
+export interface PickupMovie extends MovieDetails {
+  /** The title's page on TMDB or IMDb, whichever the caller linked. */
+  readonly url: string;
+}
 
 export interface PickupRecord {
   readonly id: number;
@@ -14,6 +21,7 @@ export interface PickupRecord {
   readonly startsAt: number | null;
   readonly startsAtText: string | null;
   readonly note: string | null;
+  readonly movie: PickupMovie | null;
   readonly status: PickupStatus;
   readonly createdAt: number;
   readonly closedAt: number | null;
@@ -27,6 +35,8 @@ export interface CreatePickupInput {
   readonly startsAt: number | null;
   readonly startsAtText: string | null;
   readonly note: string | null;
+  /** Only a movie night with a linked film has one. */
+  readonly movie?: PickupMovie | null;
 }
 
 export interface PickupRepository {
@@ -54,6 +64,20 @@ const toTheme = (value: unknown): PickupTheme => {
   return isPickupTheme(text) ? text : 'game';
 };
 
+const toMovie = (row: SqlRow): PickupMovie | null => {
+  const title = asNullableText(row['movie_title']);
+  const url = asNullableText(row['movie_url']);
+  return title === null || url === null
+    ? null
+    : {
+        title,
+        year: asNullableNumber(row['movie_year']),
+        overview: asNullableText(row['movie_overview']),
+        posterUrl: asNullableText(row['movie_poster_url']),
+        url,
+      };
+};
+
 const toPickup = (row: SqlRow): PickupRecord => ({
   id: asNumber(row['id']),
   guildId: asText(row['guild_id']),
@@ -64,6 +88,7 @@ const toPickup = (row: SqlRow): PickupRecord => ({
   startsAt: asNullableNumber(row['starts_at']),
   startsAtText: asNullableText(row['starts_at_text']),
   note: asNullableText(row['note']),
+  movie: toMovie(row),
   status: asText(row['status']) === 'closed' ? 'closed' : 'open',
   createdAt: asNumber(row['created_at']),
   closedAt: asNullableNumber(row['closed_at']),
@@ -71,8 +96,10 @@ const toPickup = (row: SqlRow): PickupRecord => ({
 
 export const createPickupRepository = (db: DatabaseSync): PickupRepository => {
   const insertStatement = db.prepare(
-    `INSERT INTO pickups (guild_id, channel_id, theme, creator_id, starts_at, starts_at_text, note, status, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?)`,
+    `INSERT INTO pickups (guild_id, channel_id, theme, creator_id, starts_at, starts_at_text, note,
+                          movie_title, movie_year, movie_overview, movie_poster_url, movie_url,
+                          status, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?)`,
   );
   const attachStatement = db.prepare('UPDATE pickups SET message_id = ? WHERE id = ?');
   const byIdStatement = db.prepare('SELECT * FROM pickups WHERE id = ?');
@@ -92,6 +119,7 @@ export const createPickupRepository = (db: DatabaseSync): PickupRepository => {
 
   return {
     create: (input) => {
+      const movie = input.movie ?? null;
       const result = insertStatement.run(
         input.guildId,
         input.channelId,
@@ -100,6 +128,11 @@ export const createPickupRepository = (db: DatabaseSync): PickupRepository => {
         input.startsAt,
         input.startsAtText,
         input.note,
+        movie?.title ?? null,
+        movie?.year ?? null,
+        movie?.overview ?? null,
+        movie?.posterUrl ?? null,
+        movie?.url ?? null,
         Date.now(),
       );
       return Number(result.lastInsertRowid);

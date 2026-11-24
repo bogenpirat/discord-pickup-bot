@@ -1,5 +1,5 @@
 import type { PickupChoice } from '../domain/pickupChoice.ts';
-import type { PickupTheme } from '../domain/pickupTheme.ts';
+import type { CinemaChoice, PickupTheme } from '../domain/pickupTheme.ts';
 import type { MatchOutcome } from '../domain/valorant/matchSummary.ts';
 import type { RiotIdProblem } from '../domain/valorant/riotId.ts';
 
@@ -35,11 +35,16 @@ export interface CinemaStrings extends PickupCallStrings {
   readonly curtainUp: string;
   readonly presentedBy: string;
   readonly showtime: string;
-  readonly choice: Readonly<Record<PickupChoice, string>>;
+  readonly choice: Readonly<Record<CinemaChoice, string>>;
   readonly closeButton: string;
   readonly openFooter: (screening: number) => string;
   readonly closedFooter: (screening: number) => string;
-  readonly calendarTitle: (guildName: string | null) => string;
+  /** `feature` is the linked film's title, when there is one. */
+  readonly calendarTitle: (guildName: string | null, feature: string | null) => string;
+  /** The film was linked, but TMDB could not tell what it is. */
+  readonly movieNotFound: string;
+  /** No time was found next to a linked film, whose poster now carries the text. */
+  readonly noShowtimeFound: string;
   readonly configChannelSaved: (channelId: string) => string;
   readonly configRoleSaved: (roleId: string) => string;
   readonly configRoleCleared: string;
@@ -229,11 +234,18 @@ const deCinema: CinemaStrings = {
   curtainUp: '🍿 Vorhang auf!',
   presentedBy: 'Präsentiert von',
   showtime: 'Vorstellung',
-  choice: { in: 'Ticket', later: 'Komme später', out: 'Passe' },
+  choice: { in: 'Ticket', out: 'Passe' },
   closeButton: 'Kasse schließen',
   openFooter: (screening) => `Vorstellung Nr. ${screening} · Ticket per Button lösen`,
   closedFooter: (screening) => `Vorstellung Nr. ${screening} · Kasse geschlossen`,
-  calendarTitle: (guildName) => (guildName === null ? 'Filmabend' : `Filmabend @ ${guildName}`),
+  calendarTitle: (guildName, feature) => {
+    const title = feature === null ? 'Filmabend' : `Filmabend: ${feature}`;
+    return guildName === null ? title : `${title} @ ${guildName}`;
+  },
+  movieNotFound:
+    'Den verlinkten Film konnte ich auf TMDB nicht nachschlagen, deshalb zeige ich deinen Text so, wie du ihn geschrieben hast.',
+  noShowtimeFound:
+    'Ich habe keine Uhrzeit gefunden. Erkannt werden z. B. `20:30`, `20 Uhr`, `halb 9`, `in 90 Minuten`, `morgen 20:30`, `Sonntag 20 Uhr`. Mit `/cinema-time` kannst du die Vorstellung nachtragen.',
   noFallbackChannel:
     'Ich kann hier nicht schreiben und es ist kein Kino-Ausweich-Kanal gesetzt. Ein Admin kann ihn mit `/pickup-config kino-kanal` festlegen.',
   posted: (url) => `🎬 Vorhang auf — Filmabend angekündigt: ${url}`,
@@ -254,11 +266,18 @@ const enCinema: CinemaStrings = {
   curtainUp: '🍿 Curtain up!',
   presentedBy: 'Presented by',
   showtime: 'Showtime',
-  choice: { in: 'Ticket', later: 'Running late', out: 'Pass' },
+  choice: { in: 'Ticket', out: 'Pass' },
   closeButton: 'Close box office',
   openFooter: (screening) => `Screening #${screening} · Grab a ticket below`,
   closedFooter: (screening) => `Screening #${screening} · Box office closed`,
-  calendarTitle: (guildName) => (guildName === null ? 'Movie night' : `Movie night @ ${guildName}`),
+  calendarTitle: (guildName, feature) => {
+    const title = feature === null ? 'Movie night' : `Movie night: ${feature}`;
+    return guildName === null ? title : `${title} @ ${guildName}`;
+  },
+  movieNotFound:
+    'I could not look up the linked film on TMDB, so your text is shown as you wrote it.',
+  noShowtimeFound:
+    'I did not find a time in there. Recognised formats include `20:30`, `8pm`, `half past 8`, `in 90 minutes`, `tomorrow 8pm`, `sunday 8pm`. Use `/cinema-time` to add the showtime afterwards.',
   noFallbackChannel:
     'I cannot post here and no cinema fallback channel is configured. An admin can set one with `/pickup-config cinema-channel`.',
   posted: (url) => `🎬 Curtain up — movie night announced: ${url}`,

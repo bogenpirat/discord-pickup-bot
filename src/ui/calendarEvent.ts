@@ -1,6 +1,7 @@
 import { messageLink } from 'discord.js';
 import type { PickupRecord } from '../db/repositories/pickupRepository.ts';
 import type { CalendarEvent } from '../domain/calendar/googleCalendarLink.ts';
+import { movieHeading } from './movieHeading.ts';
 import type { Strings } from './strings.ts';
 
 /** How long a pickup is assumed to run, for want of an end time on the record. */
@@ -33,14 +34,22 @@ export const pickupCalendarEvent = (
 
   // The organiser's own words come first and the permalink last, so a calendar
   // that truncates a long description cuts the boilerplate rather than the note.
-  const details = [pickup.note, messageUrl === null ? null : strings.calendarDetails(messageUrl)]
+  // A film's page goes in too, since its link no longer sits in the note.
+  const details = [
+    pickup.note,
+    pickup.movie?.url ?? null,
+    messageUrl === null ? null : strings.calendarDetails(messageUrl),
+  ]
     .filter((part): part is string => part !== null)
     .join('\n\n');
 
   return {
     title:
       pickup.theme === 'cinema'
-        ? strings.cinema.calendarTitle(guildName)
+        ? strings.cinema.calendarTitle(
+            guildName,
+            pickup.movie === null ? null : movieHeading(pickup.movie),
+          )
         : strings.calendarTitle(guildName),
     startsAt: pickup.startsAt,
     durationMinutes: CALENDAR_DURATION_MINUTES,

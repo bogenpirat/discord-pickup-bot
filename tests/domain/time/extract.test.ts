@@ -142,3 +142,18 @@ describe('bare numbers are not mistaken for times', () => {
     expectTime('brauchen noch 2 leute fuer 20:30', '2026-07-27T20:30');
   });
 });
+
+describe('what remains without the time', () => {
+  it.each([
+    ['Dune heute 20 Uhr', 'Dune'],
+    ['um 20:30 ranked', 'ranked'],
+    ['wer kommt? morgen 20:30, mit snacks', 'wer kommt? mit snacks'],
+    ['20:30', ''],
+  ])('leaves %s as %j', (input, remainder) => {
+    expect(extract(input).remainder).toBe(remainder);
+  });
+
+  it('keeps the whole text when no time was found', () => {
+    expect(extract('  brauchen noch   2 leute ').remainder).toBe('brauchen noch 2 leute');
+  });
+});

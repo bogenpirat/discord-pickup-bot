@@ -183,6 +183,33 @@ describe('pickupRepository', () => {
     expect(db.prepare('SELECT COUNT(*) AS c FROM pickups').get()?.['c']).toBe(2);
   });
 
+  it('round trips the film of a movie night', () => {
+    const repository = createPickupRepository(db);
+    const movie = {
+      title: 'Alien',
+      year: 1979,
+      overview: 'In space no one can hear you scream.',
+      posterUrl: 'https://image.tmdb.org/t/p/w342/alien.jpg',
+      url: 'https://www.themoviedb.org/movie/348',
+    };
+    const id = repository.create({
+      guildId: GUILD,
+      channelId: 'channel-1',
+      theme: 'cinema',
+      creatorId: 'creator-1',
+      startsAt: null,
+      startsAtText: null,
+      note: null,
+      movie,
+    });
+
+    expect(repository.findById(id)?.movie).toEqual(movie);
+  });
+
+  it('stores no film for a pickup without one', () => {
+    expect(createPickupRepository(db).findById(newPickup())?.movie).toBeNull();
+  });
+
   it('round trips a start time', () => {
     const repository = createPickupRepository(db);
     const startsAt = Date.UTC(2026, 6, 27, 18, 30);

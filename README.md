@@ -238,9 +238,17 @@ look:
   typed as the feature title (*Überraschungsfilm* if you typed nothing), *Präsentiert von*
   and *Vorstellung* lines, a velvet-red embed and the pickup's number printed as the
   screening number in the footer. The ping goes out as *🍿 Vorhang auf!*.
-- The buttons sell tickets: **🎟️ Ticket**, **🍿 Komme später**, **🚪 Passe** and
-  **Kasse schließen**. These icons are fixed; `/pickup-config emoji` only affects `/valo`.
-- The calendar entry is titled `Filmabend @ <server name>` (`Movie night @ …` in English).
+- Link a film on TMDB or IMDb anywhere in the text (`/cinema info:https://www.imdb.com/title/tt0078748/ heute 20 Uhr`)
+  and, with `TMDB_API_KEY` set, the poster bills the film instead: its title and year as
+  the feature title, linked to the page, its poster as the thumbnail and its plot quoted
+  underneath. The link and the time are taken out of your text; whatever else you wrote
+  follows the plot, and nothing is shown when the link and the time were all there was. If
+  TMDB does not know the film, your text is shown as written and you are told so.
+- The buttons sell tickets: **🎟️ Ticket**, **🚪 Passe** and **Kasse schließen** — there is
+  no *running late* for a film. These icons are fixed; `/pickup-config emoji` only affects
+  `/valo`.
+- The calendar entry is titled `Filmabend @ <server name>` (`Movie night @ …` in English),
+  or `Filmabend: Alien (1979) @ <server name>` with a linked film.
 
 `/cinema-time` moves the showtime of the last movie night in the channel, and `/valo-time`
 the last game call — each leaves the other alone, even when both were posted in the same
@@ -380,6 +388,7 @@ VALORANT_API_KEY=                         # optional; blank = no /valo-account, 
 VALORANT_RATE_LIMIT_PER_MINUTE=30         # requests per minute your key allows
 VALORANT_PLAYGROUND_SECRET=               # optional; blank = no API playground
 WARDOGS_API_KEY=                          # needed for /wd
+TMDB_API_KEY=                             # optional; blank = no film posters in /cinema
 ADMIN_USERNAME=admin                      # web console login
 ADMIN_PASSWORD_HASH=                      # optional; blank = no web console
 ```
@@ -417,6 +426,11 @@ server, so it needs `PUBLIC_BASE_URL` set as well — see
 sent in an `X-API-Key` header on server lookups. The site refuses lookups without one from
 7 Nov 2026, so `/wd` and the join page's server details need it. Join links and banners work
 without a key.
+
+`TMDB_API_KEY` comes from your [TMDB API settings](https://www.themoviedb.org/settings/api);
+either the *API key* or the *API read access token* works. With it, a `/cinema` call that
+links a film on TMDB or IMDb shows the film's poster, year and plot, fetched once when the
+movie night is called. Leave it blank and links stay in the text as written.
 
 `ADMIN_PASSWORD_HASH` turns on the [web console](#the-web-console). It needs
 `PUBLIC_BASE_URL` too, since the console is served by the same web server.

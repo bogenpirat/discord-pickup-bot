@@ -46,6 +46,11 @@ const schema = z.object({
   // site refuses server lookups without one from 7 Nov 2026, so blank or absent
   // leaves /wd answering that the site is not responding.
   WARDOGS_API_KEY: z.string().min(1).optional(),
+  // Key for The Movie Database (https://www.themoviedb.org/settings/api), either
+  // the v3 API key or the v4 read access token. With it, a movie night that links
+  // a film on TMDB or IMDb shows its poster, year and plot. Blank or absent leaves
+  // the link in the text as written.
+  TMDB_API_KEY: z.string().min(1).optional(),
   // Login for the web console at `<PUBLIC_BASE_URL>/pickup/`. The console is
   // served only when a hash is set, and only alongside the HTTP server. The hash
   // comes from `npm run hash-password`; a plain password is refused so it never

@@ -12,9 +12,15 @@ import { fallbackChannelFor, mentionRoleFor } from '../db/repositories/guildSett
 import { replyEphemeral } from '../discord/reply.ts';
 import type { SlashCommand } from '../discord/types.ts';
 import type { PickupTheme } from '../domain/pickupTheme.ts';
-import { extractStartTime } from '../domain/time/extract.ts';
 import { renderPickupMessage } from '../ui/pickupMessage.ts';
-import { callStringsFor, resolveLocale, stringsFor } from '../ui/strings.ts';
+import {
+  callStringsFor,
+  type PickupCallStrings,
+  resolveLocale,
+  type Strings,
+  stringsFor,
+} from '../ui/strings.ts';
+import { type PickupInfo, readPickupInfo } from './readPickupInfo.ts';
 
 /**
  * Where a pickup ended up, and whether that was the caller's own channel. The
@@ -67,6 +73,23 @@ const resolveTarget = async (
   return configured === null ? { kind: 'unavailable' } : { kind: 'fallback', channel: configured };
 };
 
+/** What the caller should know about how their text was read. */
+const callNotices = (
+  info: string,
+  read: PickupInfo,
+  strings: Strings,
+  replies: PickupCallStrings,
+): string[] => {
+  const notices: string[] = [];
+  if (read.movieNotFound) {
+    notices.push(strings.cinema.movieNotFound);
+  }
+  if (info !== '' && read.startsAt === null) {
+    notices.push(read.movie === null ? replies.noTimeFound : strings.cinema.noShowtimeFound);
+  }
+  return notices;
+};
+
 const callPickup =
   (theme: PickupTheme) =>
   async (interaction: ChatInputCommandInteraction, context: AppContext): Promise<void> => {
@@ -99,16 +122,23 @@ const callPickup =
     const channel = target.channel;
 
     const info = (interaction.options.getString('info') ?? '').trim();
-    const extracted = extractStartTime(info, settings.timezone, context.now());
+    const read = await readPickupInfo(
+      info,
+      theme,
+      settings.timezone,
+      context.now(),
+      context.movies,
+    );
 
     const pickupId = context.pickups.create({
       guildId: interaction.guildId,
       channelId: channel.id,
       theme,
       creatorId: interaction.user.id,
-      startsAt: extracted.startsAt === null ? null : extracted.startsAt.epochMilliseconds,
+      startsAt: read.startsAt === null ? null : read.startsAt.epochMilliseconds,
       startsAtText: null,
-      note: info === '' ? null : info,
+      note: read.note,
+      movie: read.movie,
     });
 
     const pickup = context.pickups.findById(pickupId);
@@ -156,12 +186,12 @@ const callPickup =
           });
       }
 
-      const notice = info !== '' && extracted.startsAt === null ? `\n${replies.noTimeFound}` : '';
       const confirmation =
         target.kind === 'fallback'
           ? replies.postedElsewhere(channel.id, message.url)
           : replies.posted(message.url);
-      await interaction.editReply({ content: `${confirmation}${notice}` });
+      const notices = callNotices(info, read, strings, replies);
+      await interaction.editReply({ content: [confirmation, ...notices].join('\n') });
     } catch (error) {
       context.pickups.remove(pickupId);
       context.logger.error({ err: error, guildId: interaction.guildId }, 'failed to post pickup');

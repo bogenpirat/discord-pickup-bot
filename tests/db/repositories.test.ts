@@ -189,7 +189,7 @@ describe('pickupRepository', () => {
       title: 'Alien',
       year: 1979,
       overview: 'In space no one can hear you scream.',
-      posterUrl: 'https://image.tmdb.org/t/p/w342/alien.jpg',
+      posterUrl: 'https://image.tmdb.org/t/p/w500/alien.jpg',
       url: 'https://www.themoviedb.org/movie/348',
     };
     const id = repository.create({

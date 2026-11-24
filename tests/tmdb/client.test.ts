@@ -38,7 +38,7 @@ describe('createTmdbClient', () => {
       title: 'Alien',
       year: 1979,
       overview: 'Die Crew der Nostromo …',
-      posterUrl: 'https://image.tmdb.org/t/p/w342/alien.jpg',
+      posterUrl: 'https://image.tmdb.org/t/p/w500/alien.jpg',
     });
     expect(tmdb.requests).toHaveLength(1);
   });

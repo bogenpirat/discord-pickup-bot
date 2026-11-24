@@ -45,7 +45,6 @@ const GAME_COLOR = 0x5865f2;
 const CINEMA_COLOR = 0xb3121d;
 const CLOSED_COLOR = 0x71767b;
 
-const PRESENTER_EMOJI = '🎥';
 const SHOWTIME_EMOJI = '🕗';
 const REEL_EMOJI = '🎞️';
 const NOTE_EMOJI = '💬';
@@ -222,13 +221,15 @@ const buildGameEmbed = (view: PickupView, strings: Strings): EmbedBuilder => {
 };
 
 /**
- * A movie night is laid out like a poster: the marquee over the feature, who
- * presents it and when it shows, and the pickup's id doubling as the
- * screening number at the bottom of the ticket.
+ * A movie night is laid out like a poster: the marquee over the feature, when
+ * it shows, and the pickup's id doubling as the screening number at the bottom
+ * of the ticket.
  *
  * A linked film takes over the title, links it to the film's page, and brings
  * its poster and plot. Whatever else the caller wrote follows the plot, and is
- * left out when the link and the time were all there was.
+ * left out when the link and the time were all there was. The poster goes in
+ * the image slot rather than the thumbnail, so it shows at full width; Discord
+ * always draws that slot last, under the ticket columns.
  */
 const buildCinemaEmbed = (view: PickupView, strings: Strings): EmbedBuilder => {
   const cinema = strings.cinema;
@@ -247,7 +248,7 @@ const buildCinemaEmbed = (view: PickupView, strings: Strings): EmbedBuilder => {
   if (movie !== null) {
     embed.setURL(movie.url);
     if (movie.posterUrl !== null) {
-      embed.setThumbnail(movie.posterUrl);
+      embed.setImage(movie.posterUrl);
     }
     if (movie.overview !== null) {
       blocks.push(quotePlot(movie.overview));
@@ -257,14 +258,13 @@ const buildCinemaEmbed = (view: PickupView, strings: Strings): EmbedBuilder => {
     }
   }
 
-  const lines = [`${PRESENTER_EMOJI} ${cinema.presentedBy} ${userMention(view.pickup.creatorId)}`];
   const start = renderStart(view.pickup, view.timeZone ?? DEFAULT_TIME_ZONE);
   if (start !== null) {
-    lines.push(`${SHOWTIME_EMOJI} ${cinema.showtime}: ${start}`);
+    blocks.push(`${SHOWTIME_EMOJI} ${cinema.showtime}: ${start}`);
   }
-  blocks.push(lines.join('\n'));
 
-  embed.setDescription(blocks.join('\n\n'));
+  // Discord refuses an empty description, which an untimed call without a film now has.
+  embed.setDescription(blocks.length === 0 ? null : blocks.join('\n\n'));
   addChoiceFields(embed, view, strings, choiceDisplay(view, strings));
 
   return embed;

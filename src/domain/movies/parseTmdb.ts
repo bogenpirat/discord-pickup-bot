@@ -9,8 +9,8 @@ export interface MovieDetails {
   readonly posterUrl: string | null;
 }
 
-/** w342 is TMDB's poster size closest to what a Discord thumbnail is shown at. */
-const POSTER_BASE_URL = 'https://image.tmdb.org/t/p/w342';
+/** w500 is sharp at the size Discord draws an embed's main image, without the weight of the original. */
+const POSTER_BASE_URL = 'https://image.tmdb.org/t/p/w500';
 
 const blankToNull = (value: string | null | undefined): string | null => {
   const trimmed = value?.trim() ?? '';

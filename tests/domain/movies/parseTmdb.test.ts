@@ -15,7 +15,7 @@ describe('parseTmdbTitle', () => {
       title: 'Dune: Part Two',
       year: 2024,
       overview: 'Follow the mythic journey of Paul Atreides.',
-      posterUrl: 'https://image.tmdb.org/t/p/w342/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg',
+      posterUrl: 'https://image.tmdb.org/t/p/w500/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg',
     });
   });
 

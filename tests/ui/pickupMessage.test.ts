@@ -646,7 +646,7 @@ describe('movie night rendering', () => {
     expect(embed?.toJSON().title).toBe('🎞️ Überraschungsfilm');
   });
 
-  it('names the presenter and the showtime', () => {
+  it('names the showtime but not the presenter', () => {
     const createdAt = Date.UTC(2026, 6, 27, 12, 0);
     const startsAt = Date.UTC(2026, 6, 27, 18, 30);
     const description = render({
@@ -655,8 +655,7 @@ describe('movie night rendering', () => {
       mentionRoleId: null,
     }).embeds[0]?.toJSON().description;
 
-    expect(description).toContain('🎥 Präsentiert von <@creator-1>');
-    expect(description).toContain(`🕗 Vorstellung: <t:${startsAt / 1000}:t>`);
+    expect(description).toBe(`🕗 Vorstellung: <t:${startsAt / 1000}:t> (<t:${startsAt / 1000}:R>)`);
   });
 
   it('shows a showtime that was only given as text', () => {
@@ -760,7 +759,7 @@ describe('movie night rendering', () => {
       title: 'Alien',
       year: 1979,
       overview: 'Die Crew der *Nostromo* empfängt ein Notsignal.',
-      posterUrl: 'https://image.tmdb.org/t/p/w342/alien.jpg',
+      posterUrl: 'https://image.tmdb.org/t/p/w500/alien.jpg',
       url: 'https://www.themoviedb.org/movie/348',
     };
 
@@ -778,23 +777,27 @@ describe('movie night rendering', () => {
       expect(embed?.url).toBe('https://www.themoviedb.org/movie/348');
     });
 
-    it('hangs the poster next to the title', () => {
-      expect(embedOf({})?.thumbnail?.url).toBe('https://image.tmdb.org/t/p/w342/alien.jpg');
+    it('shows the poster full size rather than as a thumbnail', () => {
+      const embed = embedOf({});
+
+      expect(embed?.image?.url).toBe('https://image.tmdb.org/t/p/w500/alien.jpg');
+      expect(embed?.thumbnail).toBeUndefined();
     });
 
-    it('quotes the plot, escaped, above the presenter', () => {
-      const description = embedOf({})?.description ?? '';
-
-      expect(description.startsWith('> Die Crew der \\*Nostromo\\* empfängt ein Notsignal.')).toBe(
-        true,
+    it('quotes the plot, escaped', () => {
+      expect(embedOf({})?.description).toBe(
+        '> Die Crew der \\*Nostromo\\* empfängt ein Notsignal.',
       );
-      expect(description).toContain('🎥 Präsentiert von <@creator-1>');
     });
 
-    it('shows what else the caller wrote under the plot', () => {
-      const description = embedOf({ note: 'mit Pizza' })?.description ?? '';
+    it('shows what else the caller wrote between the plot and the showtime', () => {
+      const description = embedOf({
+        note: 'mit Pizza',
+        createdAt: Date.UTC(2026, 6, 27, 12, 0),
+        startsAt: Date.UTC(2026, 6, 27, 18, 30),
+      })?.description;
 
-      expect(description).toContain('Notsignal.\n\n💬 mit Pizza\n\n🎥');
+      expect(description).toContain('Notsignal.\n\n💬 mit Pizza\n\n🕗 Vorstellung:');
     });
 
     it('leaves the text out when nothing else was written', () => {
@@ -812,8 +815,8 @@ describe('movie night rendering', () => {
       const embed = embedOf({ movie: { ...alien, year: null, overview: null, posterUrl: null } });
 
       expect(embed?.title).toBe('🎞️ Alien');
-      expect(embed?.thumbnail).toBeUndefined();
-      expect(embed?.description?.startsWith('🎥')).toBe(true);
+      expect(embed?.image).toBeUndefined();
+      expect(embed?.description).toBeUndefined();
     });
 
     it('names the film in the calendar event', () => {

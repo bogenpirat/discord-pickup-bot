@@ -33,7 +33,6 @@ export interface CinemaStrings extends PickupCallStrings {
   readonly untitled: string;
   /** Sent alongside the role ping, ahead of the poster. */
   readonly curtainUp: string;
-  readonly presentedBy: string;
   readonly showtime: string;
   readonly choice: Readonly<Record<CinemaChoice, string>>;
   readonly closeButton: string;
@@ -232,7 +231,6 @@ const deCinema: CinemaStrings = {
   marquee: '🎬 FILMABEND',
   untitled: 'Überraschungsfilm',
   curtainUp: '🍿 Vorhang auf!',
-  presentedBy: 'Präsentiert von',
   showtime: 'Vorstellung',
   choice: { in: 'Ticket', out: 'Passe' },
   closeButton: 'Kasse schließen',
@@ -264,7 +262,6 @@ const enCinema: CinemaStrings = {
   marquee: '🎬 MOVIE NIGHT',
   untitled: 'Mystery feature',
   curtainUp: '🍿 Curtain up!',
-  presentedBy: 'Presented by',
   showtime: 'Showtime',
   choice: { in: 'Ticket', out: 'Pass' },
   closeButton: 'Close box office',

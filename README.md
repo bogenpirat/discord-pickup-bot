@@ -235,12 +235,12 @@ look:
 - When the bot cannot post where it was called, it falls back to the channel set with
   `/pickup-config kino-kanal`, not the `/valo` fallback.
 - The message is laid out like a cinema poster: a **🎬 FILMABEND** marquee, the text you
-  typed as the feature title (*Überraschungsfilm* if you typed nothing), *Präsentiert von*
-  and *Vorstellung* lines, a velvet-red embed and the pickup's number printed as the
+  typed as the feature title (*Überraschungsfilm* if you typed nothing), a *Vorstellung*
+  line, a velvet-red embed and the pickup's number printed as the
   screening number in the footer. The ping goes out as *🍿 Vorhang auf!*.
 - Link a film on TMDB or IMDb anywhere in the text (`/cinema info:https://www.imdb.com/title/tt0078748/ heute 20 Uhr`)
   and, with `TMDB_API_KEY` set, the poster bills the film instead: its title and year as
-  the feature title, linked to the page, its poster as the thumbnail and its plot quoted
+  the feature title, linked to the page, its poster shown full size at the bottom and its plot quoted
   underneath. The link and the time are taken out of your text; whatever else you wrote
   follows the plot, and nothing is shown when the link and the time were all there was. If
   TMDB does not know the film, your text is shown as written and you are told so.

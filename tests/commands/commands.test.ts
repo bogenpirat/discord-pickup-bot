@@ -1110,7 +1110,7 @@ describe('/cinema movie night', () => {
       title: 'Alien',
       year: 1979,
       overview: 'In space no one can hear you scream.',
-      posterUrl: 'https://image.tmdb.org/t/p/w342/alien.jpg',
+      posterUrl: 'https://image.tmdb.org/t/p/w500/alien.jpg',
     };
 
     /** A TMDB that knows Alien and records what it was asked. */
